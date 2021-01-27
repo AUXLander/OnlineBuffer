@@ -65,6 +65,9 @@ struct ClipboardState2
 	LPVOID lpdata;
 };
 
+
+
+
 #pragma pack(2)
 struct DIB
 {
@@ -97,6 +100,28 @@ struct BMP
 
 //#pragma pack(pop) 
 
+uint32_t GetClipboardDataLength(ClipboardStateFormat format, void* data, void* pszdata)
+{
+	switch (format)
+	{
+		case ClipboardStateFormat::F_TEXT:
+		{
+			return std::strlen(reinterpret_cast<const char*>(data)) + 1;
+		};
+
+		case ClipboardStateFormat::F_UNICODE:
+		{
+			return std::wcslen(reinterpret_cast<const wchar_t*>(data)) + 1;
+		};
+
+		case ClipboardStateFormat::F_BITMAP:
+		{
+			return reinterpret_cast<DIB*>(pszdata)->biSizeImage + sizeof(BMP);
+		};
+	}
+
+	return NULL;
+}
 
 template<class T> inline void writebin(std::ofstream &file, T* data, std::streamsize size = sizeof(T))
 {
@@ -190,174 +215,95 @@ ClipboardStateStatus GetCBData(ClipboardState2& state)
 				if (pszData != nullptr)
 				{
 					// == == == == == == == == == == ==
-					
-					if (state.format == ClipboardStateFormat::F_TEXT)
+
+					uint32_t  length = GetClipboardDataLength(state.format, hData, pszData);
+					XXH_hash_t lhash = XXH(hData, length, NULL);
+
+					if (state.hash != lhash)
 					{
-						unsigned int length = std::strlen(reinterpret_cast<const char*>(hData)) + 1;
+						state.hash = lhash;
 
-						XXH_hash_t lhash = XXH(hData, sizeof(char) * length, NULL);
+						delete[] state.lpdata;
 
-						if (state.hash != lhash)
+						switch (state.format)
 						{
-							delete[] state.lpdata;
-
-							state.hash = lhash;
-							state.length = length;
-							state.lpdata = new char[state.length];
-
-							std::copy(reinterpret_cast<char*>(pszData), reinterpret_cast<char*>(pszData) + state.length, reinterpret_cast<char*>(state.lpdata));
-
-							state.status = ClipboardStateStatus::Changed;
-						}
-						else
-						{
-							state.status = ClipboardStateStatus::OK;
-						}
-					}
-					else if (state.format == ClipboardStateFormat::F_UNICODE)
-					{
-						unsigned int length = std::wcslen(reinterpret_cast<const wchar_t*>(hData)) + 1;
-
-						XXH_hash_t lhash = XXH(hData, sizeof(wchar_t) * length, NULL);
-
-						if (state.hash != lhash)
-						{
-							delete[] state.lpdata;
-
-							state.hash = lhash;
-							state.length = length;
-							state.lpdata = new wchar_t[state.length];
-
-							std::copy(reinterpret_cast<wchar_t*>(pszData), reinterpret_cast<wchar_t*>(pszData) + state.length, reinterpret_cast<wchar_t*>(state.lpdata));
-
-							state.status = ClipboardStateStatus::Changed;
-						}
-						else
-						{
-							state.status = ClipboardStateStatus::OK;
-						}
-					}
-					else if (state.format == ClipboardStateFormat::F_BITMAP)
-					{
-						DIB* dibinfo = reinterpret_cast<DIB*>(pszData);
-
-						BMP bmp = {
-							.header = {
-								.type	= 0x4D42,
-								.bfSize = sizeof(BMP) + dibinfo->biSizeImage,
-								.offset = sizeof(BMP)
-							},
-							.dib = *dibinfo
-						};
-
-						XXH_hash_t lhash = XXH(hData, bmp.header.bfSize, NULL);
-
-						if (state.hash != lhash)
-						{
-							delete[] state.lpdata;
-
-							state.hash = lhash;
-							state.length = sizeof(BMP);
-							state.lpdata = new BMP(bmp);
-
-							/*
-							std::wcout << "Type: " << std::hex << bmp.header.type << "\n";
-							std::wcout << "bfSize: " << std::dec << bmp.header.bfSize << "\n";
-							std::wcout << "Reserved: " << bmp.header.reserved << "\n";
-							std::wcout << "Offset: " << bmp.header.offset << "\n";
-							std::wcout << "biSize: " << bmp.dib.biSize << "\n";
-							std::wcout << "Width: " << bmp.dib.biWidth << "\n";
-							std::wcout << "Height: " << bmp.dib.biHeight << "\n";
-							std::wcout << "Planes: " << bmp.dib.biPlanes << "\n";
-							std::wcout << "Bits: " << bmp.dib.biBitCount << "\n";
-							std::wcout << "Compression: " << bmp.dib.biCompression << "\n";
-							std::wcout << "Size: " << bmp.dib.biSizeImage << "\n";
-							std::wcout << "X-res: " << bmp.dib.biXPelsPerMeter << "\n";
-							std::wcout << "Y-res: " << bmp.dib.biYPelsPerMeter << "\n";
-							std::wcout << "ClrUsed: " << bmp.dib.biClrUsed << "\n";
-							std::wcout << "ClrImportant: " << bmp.dib.biClrImportant << "\n";
-							*/
-							
-							wchar_t filename[256] = L"buffer";
-							wchar_t filepath[256] = L"E:/";
-							
-							wchar_t filepath_bmp[256];
-							wchar_t filepath_png[256];
-
-							unsigned int timeint = time(NULL);
-
-							swprintf_s(filepath_bmp, L"%s%s-%d.bmp", filepath, filename, timeint);
-							swprintf_s(filepath_png, L"%s%s-%d.png", filepath, filename, timeint);
-
-
-							std::ofstream file(filepath_bmp, std::ios::out | std::ios::binary);
-							
-
-							if (file)
+							case ClipboardStateFormat::F_TEXT:
 							{
-								bmp.dib.biCompression = 0;
+								state.length = length;
+								state.lpdata = new char[state.length];
 
-								writebin(file, &bmp.header.type); 
-								writebin(file, &bmp.header.bfSize);
-								writebin(file, &bmp.header.reserved);
-								writebin(file, &bmp.header.offset);
-								writebin(file, &bmp.dib.biSize); 
-								writebin(file, &bmp.dib.biWidth);
-								writebin(file, &bmp.dib.biHeight); 
-								writebin(file, &bmp.dib.biPlanes); 
-								writebin(file, &bmp.dib.biBitCount); 
-								writebin(file, &bmp.dib.biCompression);
-								writebin(file, &bmp.dib.biSizeImage); 
-								writebin(file, &bmp.dib.biXPelsPerMeter);
-								writebin(file, &bmp.dib.biYPelsPerMeter);
-								writebin(file, &bmp.dib.biClrUsed);
-								writebin(file, &bmp.dib.biClrImportant);
-								writebin(file, dibinfo + 1, bmp.dib.biSizeImage);
+								std::copy(reinterpret_cast<char*>(pszData), reinterpret_cast<char*>(pszData) + state.length, reinterpret_cast<char*>(state.lpdata));
+							};
+							break;
 
-								
-
-								file.close();
-							}
-
-							std::ifstream in(filepath_bmp, std::ifstream::ate | std::ifstream::binary);
-							
-							DWORD siz = in.tellg();
-							BYTE* buf = new BYTE[siz];
-
-							in.seekg(0, std::ios::beg);
-							in.read((char*)buf, siz);
-
-							in.close();
-
-							IStream* is = SHCreateMemStream(buf, siz);
-
-							CLSID pngClsid;
-							Gdiplus::Image image(is);
-
-							GetEncoderClsid(L"image/png", &pngClsid);
-
-							image.Save(filepath_png, &pngClsid);
-
-							delete[] buf;
-
-							is->Release();
-
-							try
+							case ClipboardStateFormat::F_UNICODE:
 							{
-								std::filesystem::remove(filepath_bmp);
-							}
-							catch (const std::filesystem::filesystem_error& err) {
-								std::string sss(err.what());
-								std::wcout << "filesystem error: " << sss.c_str() << '\n';
-							}
+								state.length = length;
+								state.lpdata = new wchar_t[state.length];
+
+								std::copy(reinterpret_cast<wchar_t*>(pszData), reinterpret_cast<wchar_t*>(pszData) + state.length, reinterpret_cast<wchar_t*>(state.lpdata));
+							};
+							break;
+
+							case ClipboardStateFormat::F_BITMAP:
+							{
+								DIB* dibinfo = reinterpret_cast<DIB*>(pszData);
+
+								dibinfo->biCompression = 0;
+
+								BMP bmp = {
+									.header = {
+										.type	= 0x4D42,
+										.bfSize = length,
+										.offset = sizeof(BMP)
+									},
+									.dib = *dibinfo
+								};
+
+								state.length = sizeof(BMP);
+								state.lpdata = new BMP(bmp);
+
+								wchar_t filename[256] = L"buffer";
+								wchar_t filepath[256] = L"E:/";
+
+								wchar_t filepath_png[256];
+
+								unsigned int timeint = time(NULL);
+
+								swprintf_s(filepath_png, L"%s%s-%d.png", filepath, filename, timeint);
 
 
-							state.status = ClipboardStateStatus::Changed;
+								BYTE* buffer = new BYTE[length];
+
+								BYTE* pBmpHeader = reinterpret_cast<BYTE*>(&bmp.header);
+								BYTE* pDibinfo	 = reinterpret_cast<BYTE*>(dibinfo);
+
+								long offset = sizeof(HEADER);
+								std::copy(pBmpHeader, pBmpHeader + offset, buffer);
+								std::copy(pDibinfo,   pDibinfo + (length - offset), buffer + offset);
+
+								IStream* is = SHCreateMemStream(buffer, length);
+
+								CLSID pngClsid;
+								Gdiplus::Image image(is);
+
+								GetEncoderClsid(L"image/png", &pngClsid);
+
+								image.Save(filepath_png, &pngClsid);
+
+								delete[] buffer;
+
+								is->Release();
+							};
+							break;
 						}
-						else
-						{
-							state.status = ClipboardStateStatus::OK;
-						}
+
+
+						state.status = ClipboardStateStatus::Changed;
+					}
+					else
+					{
+						state.status = ClipboardStateStatus::OK;
 					}
 
 					// == == == == == == == == == == ==
