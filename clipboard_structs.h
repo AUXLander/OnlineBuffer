@@ -1,9 +1,8 @@
 #pragma once
 
 #include <Windows.h>
-
-#include "clipboard_structs.h"
 #include "xxhash.h"
+#include "images.h"
 
 #ifdef _WIN64
 
@@ -32,12 +31,38 @@ struct ClipboardState
 		Changed
 	};
 
-	enum Format : unsigned int {
+	enum class Format : unsigned int {
 		F_NONE,
 		F_TEXT		= CF_TEXT,
 		F_UNICODE	= CF_UNICODETEXT,
 		F_BITMAP	= CF_DIB
 	};
+
+	static UINT format_constant(ClipboardState::Format __format) 
+	{
+		switch (__format)
+		{
+			case ClipboardState::Format::F_TEXT:
+			{
+				return CF_TEXT;
+			};
+
+			case ClipboardState::Format::F_UNICODE:
+			{
+				return CF_UNICODETEXT;
+			};
+
+			case ClipboardState::Format::F_BITMAP:
+			{
+				return CF_DIB;
+			};
+
+			default:
+			{
+				return NULL;
+			}
+		}
+	}
 
 	Status status;
 	Format format;
@@ -48,3 +73,27 @@ struct ClipboardState
 
 	LPVOID lpdata;
 };
+
+
+uint32_t GetClipboardDataLength(ClipboardState::Format format, void* data, void* pszdata)
+{
+	switch (format)
+	{
+		case ClipboardState::Format::F_TEXT:
+		{
+			return std::strlen(reinterpret_cast<const char*>(data)) + 1;
+		};
+
+		case ClipboardState::Format::F_UNICODE:
+		{
+			return std::wcslen(reinterpret_cast<const wchar_t*>(data)) + 1;
+		};
+
+		case ClipboardState::Format::F_BITMAP:
+		{
+			return reinterpret_cast<DIB*>(pszdata)->biSizeImage + sizeof(BMP);
+		};
+	}
+
+	return NULL;
+}

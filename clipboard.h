@@ -10,45 +10,6 @@
 #include "server.h"
 #include "images.h"
 
-
-int GetEncoderClsid(const WCHAR* format, CLSID* pClsid)
-{
-	int index = -1;
-
-	unsigned int numb = 0; // number of image encoders
-	unsigned int size = 0; // size of the image encoder array in bytes
-
-	Gdiplus::ImageCodecInfo* pImageCodecInfo = NULL;
-
-	Gdiplus::GetImageEncodersSize(&numb, &size);
-
-	pImageCodecInfo = reinterpret_cast<Gdiplus::ImageCodecInfo*>(malloc(size));
-	
-	if (size == 0 || pImageCodecInfo == NULL)
-	{
-		goto GetEncoderClsidOut;
-	}
-
-	Gdiplus::GetImageEncoders(numb, size, pImageCodecInfo);
-
-	for (index = 0; index < numb; index++)
-	{
-		if (wcscmp(pImageCodecInfo[index].MimeType, format) == 0)
-		{
-			*pClsid = pImageCodecInfo[index].Clsid;
-			
-			goto GetEncoderClsidOut;
-		}
-	}
-
-	index = -1;
-
-GetEncoderClsidOut:
-	free(pImageCodecInfo);
-	return index;
-}
-
-
 ClipboardState::Status GetCBData(ClipboardState& state)
 {
 	HANDLE hData;
@@ -56,19 +17,24 @@ ClipboardState::Status GetCBData(ClipboardState& state)
 
 	if (OpenClipboard(nullptr))
 	{
-		if (!IsClipboardFormatAvailable(state.format))
+		const auto c_format_value = ClipboardState::format_constant(state.format);
+		if (!IsClipboardFormatAvailable(c_format_value))
 		{
-			if (IsClipboardFormatAvailable(ClipboardState::Format::F_UNICODE))
+			const auto f_unicode = ClipboardState::format_constant(ClipboardState::Format::F_UNICODE);
+			const auto f_text	 = ClipboardState::format_constant(ClipboardState::Format::F_TEXT);
+			const auto f_bitmap  = ClipboardState::format_constant(ClipboardState::Format::F_BITMAP);
+
+			if (IsClipboardFormatAvailable(f_unicode))
 			{
 				state.format = ClipboardState::Format::F_UNICODE;
 				state.status = ClipboardState::Status::Changed;
 			}
-			else if(IsClipboardFormatAvailable(ClipboardState::Format::F_TEXT))
+			else if(IsClipboardFormatAvailable(f_text))
 			{
 				state.format = ClipboardState::Format::F_TEXT;
 				state.status = ClipboardState::Status::Changed;
 			}
-			else if (IsClipboardFormatAvailable(ClipboardState::Format::F_BITMAP))
+			else if (IsClipboardFormatAvailable(f_bitmap))
 			{
 				state.format = ClipboardState::Format::F_BITMAP;
 				state.status = ClipboardState::Status::Changed;
@@ -83,7 +49,9 @@ ClipboardState::Status GetCBData(ClipboardState& state)
 
 		if (state.format != ClipboardState::Format::F_NONE)
 		{
-			hData = GetClipboardData(state.format);
+			const auto c_format_value = ClipboardState::format_constant(state.format);
+			hData = GetClipboardData(c_format_value);
+
 			if (hData != nullptr)
 			{
 				pszData = GlobalLock(hData);
@@ -158,7 +126,7 @@ ClipboardState::Status GetCBData(ClipboardState& state)
 								BYTE* pBmpHeader = reinterpret_cast<BYTE*>(&bmp.header);
 								BYTE* pDibinfo	 = reinterpret_cast<BYTE*>(dibinfo);
 
-								long offset = sizeof(HEADER);
+								uint32_t offset = sizeof(HEADER);
 
 								std::copy(pBmpHeader, pBmpHeader + offset, buffer);
 								std::copy(pDibinfo,   pDibinfo + (length - offset), buffer + offset);

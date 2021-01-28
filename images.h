@@ -5,6 +5,8 @@
 #include <shlwapi.h>
 #include <atlbase.h>
 
+#include "clipboard_structs.h"
+
 
 #pragma pack(2)
 struct DIB
@@ -38,25 +40,39 @@ struct BMP
 #pragma pack(pop) 
 
 
-uint32_t GetClipboardDataLength(ClipboardState::Format format, void* data, void* pszdata)
+int GetEncoderClsid(const WCHAR* format, CLSID* pClsid)
 {
-	switch (format)
+	int index = -1;
+
+	unsigned int numb = 0; // number of image encoders
+	unsigned int size = 0; // size of the image encoder array in bytes
+
+	Gdiplus::ImageCodecInfo* pImageCodecInfo = NULL;
+
+	Gdiplus::GetImageEncodersSize(&numb, &size);
+
+	pImageCodecInfo = reinterpret_cast<Gdiplus::ImageCodecInfo*>(malloc(size));
+
+	if (size == 0 || pImageCodecInfo == NULL)
 	{
-		case ClipboardState::Format::F_TEXT:
-		{
-			return std::strlen(reinterpret_cast<const char*>(data)) + 1;
-		};
-
-		case ClipboardState::Format::F_UNICODE:
-		{
-			return std::wcslen(reinterpret_cast<const wchar_t*>(data)) + 1;
-		};
-
-		case ClipboardState::Format::F_BITMAP:
-		{
-			return reinterpret_cast<DIB*>(pszdata)->biSizeImage + sizeof(BMP);
-		};
+		goto GetEncoderClsidOut;
 	}
 
-	return NULL;
+	Gdiplus::GetImageEncoders(numb, size, pImageCodecInfo);
+
+	for (index = 0; index < numb; index++)
+	{
+		if (wcscmp(pImageCodecInfo[index].MimeType, format) == 0)
+		{
+			*pClsid = pImageCodecInfo[index].Clsid;
+
+			goto GetEncoderClsidOut;
+		}
+	}
+
+	index = -1;
+
+GetEncoderClsidOut:
+	free(pImageCodecInfo);
+	return index;
 }
