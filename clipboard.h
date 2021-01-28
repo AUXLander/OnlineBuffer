@@ -20,13 +20,17 @@
 
 
 #ifdef _WIN64
+
 typedef XXH64_hash_t XXH_hash_t;
+
 XXH_hash_t inline XXH(const void* input, size_t size, XXH_hash_t seed)
 {
 	return XXH3_64bits(input, size);
 }
 #else
+
 typedef XXH32_hash_t XXH_hash_t;
+
 XXH_hash_t inline XXH(const void* input, size_t size, XXH_hash_t seed)
 {
 	return XXH32(input, size, seed);
@@ -98,7 +102,7 @@ struct BMP
 	DIB dib;
 };
 
-//#pragma pack(pop) 
+#pragma pack(pop) 
 
 uint32_t GetClipboardDataLength(ClipboardStateFormat format, void* data, void* pszdata)
 {
@@ -225,6 +229,8 @@ ClipboardStateStatus GetCBData(ClipboardState2& state)
 
 						delete[] state.lpdata;
 
+						state.length = 0;
+
 						switch (state.format)
 						{
 							case ClipboardStateFormat::F_TEXT:
@@ -271,7 +277,6 @@ ClipboardStateStatus GetCBData(ClipboardState2& state)
 								unsigned int timeint = time(NULL);
 
 								swprintf_s(filepath_png, L"%s%s-%d.png", filepath, filename, timeint);
-
 
 								BYTE* buffer = new BYTE[length];
 
@@ -331,121 +336,6 @@ ClipboardStateStatus GetCBData(ClipboardState2& state)
 extern CMODE custom_mode_state;
 
 
-unsigned int GetClipboardText(ClipboardState& state)
-{
-	HANDLE hData;
-	unsigned char* pszData;
-
-	if (!OpenClipboard(nullptr))
-	{
-		return state.code = 0x2;
-	}
-
-	if (!IsClipboardFormatAvailable(state.type))
-	{
-		state.type = IsClipboardFormatAvailable(CF_BITMAP) ? CF_BITMAP : state.type;
-		state.type = IsClipboardFormatAvailable(CF_TEXT) ? CF_TEXT : state.type;
-
-		state.code = 0x1;
-	}
-	else
-	{
-		state.code = 0x0;
-	}
-
-	hData = GetClipboardData(state.type);
-	if (hData == nullptr)
-	{
-		return state.code = 0x3;
-	}
-
-	pszData = static_cast<unsigned char*>(GlobalLock(hData));
-	if (pszData == nullptr)
-	{
-		return state.code = 0x4;
-	}
-
-	if (state.type == CF_TEXT)
-	{
-		bool cverify = true;
-		unsigned int index = 0;
-		unsigned int index_l = 0;
-		unsigned int index_r = 0;
-
-		// имменно такие условия в цикле
-		while (cverify && index < 64 && index == index_l && index_l == index_r)
-		{
-			cverify = static_cast<bool>(state.data[index_l] == pszData[index_r]);
-
-			index_l += static_cast<unsigned int>(state.data[index_l] != '\0');
-			index_r += static_cast<unsigned int>(pszData[index_r] != '\0');
-
-			index++;
-		}
-
-		if (index_r != index_l || !cverify)
-		{
-			state.code = 0x1;
-		}
-	}
-	else if (state.type == CF_BITMAP)
-	{
-
-	}
-
-	std::copy(pszData, pszData + 64, state.data);
-
-	GlobalUnlock(hData);
-	CloseClipboard();
-
-	return state.code;
-}
-
-
-void ClipboadWorker_old(SOCKET& tcp_connection)
-{
-	ClipboardState state = { 0, 0, {} };
-
-	std::function<int()> sendstring = []() { return 0; };
-
-	if (custom_mode_state == CUSTOM_MODE_SERVER)
-	{
-		sendstring = [&state]()
-		{
-			return SendEachClient(reinterpret_cast<char*>(state.data));
-		};
-	}
-	else if (custom_mode_state == CUSTOM_MODE_CLIENT)
-	{
-		sendstring = [&state, &tcp_connection]()
-		{
-			char* pBuffer = nullptr;
-			//char* data = new char[65];
-
-			//const char* tdata = "GOgLESS";
-
-			//std::copy(tdata, tdata + strlen(tdata) + 1, data);
-			
-
-			//return SendData<DataType::CF__TEXT>(tcp_connection, reinterpret_cast<char**>(&data), &pBuffer, 65);
-			return SendData<DataType::CF__TEXT>(tcp_connection, reinterpret_cast<char*>(state.data), &pBuffer, strlen(reinterpret_cast<char*>(state.data)) + 1);
-		};
-	}
-
-
-	while (state.code == 0x3 || state.code < 0x2)
-	{
-		if (GetClipboardText(state) == 0x1)
-		{
-			sendstring();
-
-			std::cout << reinterpret_cast<char*>(state.data) << std::endl;
-		}
-
-		Sleep(500);
-	}
-}
-
 void ClipboadWorker(SOCKET& tcp_connection)
 {
 	// Initialize GDI+.
@@ -476,15 +366,7 @@ void ClipboadWorker(SOCKET& tcp_connection)
 			}
 		}
 
-		if (state.format == ClipboardStateFormat::F_BITMAP)
-		{
-			//Sleep(1000);
-			Sleep(500);
-		}
-		else
-		{
-			Sleep(500);
-		}
+		Sleep(500);
 	}
 
 	Gdiplus::GdiplusShutdown(gdiplusToken);
