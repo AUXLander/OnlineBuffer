@@ -1,161 +1,35 @@
 #pragma once
 #include <stdio.h>
 #include <tchar.h>
-#include <iostream>
-#include <functional>
 #include <Windows.h>
-#include <gdiplus.h>
-#include <shlwapi.h>
-#include <atlbase.h>
 #include <wchar.h>
 
+#include "clipboard_structs.h"
 #include "helpers.h"
 #include "message.h"
 #include "server.h"
-#include "xxhash.h"
+#include "images.h"
 
-#include <filesystem>
-#include <iostream>
-#include <fstream>
-
-
-#ifdef _WIN64
-
-typedef XXH64_hash_t XXH_hash_t;
-
-XXH_hash_t inline XXH(const void* input, size_t size, XXH_hash_t seed)
-{
-	return XXH3_64bits(input, size);
-}
-#else
-
-typedef XXH32_hash_t XXH_hash_t;
-
-XXH_hash_t inline XXH(const void* input, size_t size, XXH_hash_t seed)
-{
-	return XXH32(input, size, seed);
-}
-#endif
-
-struct ClipboardState
-{
-	unsigned int  type;
-	unsigned int  code;
-	unsigned char data[65];
-};
-
-enum class ClipboardStateStatus : unsigned int {
-	OK,
-	NotAvaible,
-	Changed
-};
-
-enum ClipboardStateFormat : unsigned int {
-	F_NONE,
-	F_TEXT = CF_TEXT,
-	F_UNICODE = CF_UNICODETEXT,
-	F_BITMAP = CF_DIB
-};
-
-struct ClipboardState2
-{
-	ClipboardStateStatus status;
-	ClipboardStateFormat format;
-
-	unsigned int length;
-
-	XXH_hash_t hash;
-
-	LPVOID lpdata;
-};
-
-
-
-
-#pragma pack(2)
-struct DIB
-{
-	std::uint32_t biSize;
-	std::int32_t  biWidth;
-	std::int32_t  biHeight;
-	std::uint16_t biPlanes;
-	std::uint16_t biBitCount;
-	std::uint32_t biCompression;
-	std::uint32_t biSizeImage;
-	std::int32_t  biXPelsPerMeter;
-	std::int32_t  biYPelsPerMeter;
-	std::uint32_t biClrUsed;
-	std::uint32_t biClrImportant;
-};
-
-struct HEADER
-{
-	std::uint16_t type;
-	std::uint32_t bfSize;
-	std::uint32_t reserved;
-	std::uint32_t offset;
-};
-
-struct BMP
-{
-	HEADER header;
-	DIB dib;
-};
-
-#pragma pack(pop) 
-
-uint32_t GetClipboardDataLength(ClipboardStateFormat format, void* data, void* pszdata)
-{
-	switch (format)
-	{
-		case ClipboardStateFormat::F_TEXT:
-		{
-			return std::strlen(reinterpret_cast<const char*>(data)) + 1;
-		};
-
-		case ClipboardStateFormat::F_UNICODE:
-		{
-			return std::wcslen(reinterpret_cast<const wchar_t*>(data)) + 1;
-		};
-
-		case ClipboardStateFormat::F_BITMAP:
-		{
-			return reinterpret_cast<DIB*>(pszdata)->biSizeImage + sizeof(BMP);
-		};
-	}
-
-	return NULL;
-}
-
-template<class T> inline void writebin(std::ofstream &file, T* data, std::streamsize size = sizeof(T))
-{
-	file.write(reinterpret_cast<char*>(data), size);
-}
-
-template<class T> inline void readbin(std::ifstream& file, T* data, std::streamsize size = sizeof(T))
-{
-	file.read(reinterpret_cast<char*>(data), size);
-}
 
 int GetEncoderClsid(const WCHAR* format, CLSID* pClsid)
 {
-	unsigned int numb  = 0; // number of image encoders
+	int index = -1;
+
+	unsigned int numb = 0; // number of image encoders
 	unsigned int size = 0; // size of the image encoder array in bytes
 
 	Gdiplus::ImageCodecInfo* pImageCodecInfo = NULL;
 
 	Gdiplus::GetImageEncodersSize(&numb, &size);
 
-	pImageCodecInfo = (Gdiplus::ImageCodecInfo*)(malloc(size));
+	pImageCodecInfo = reinterpret_cast<Gdiplus::ImageCodecInfo*>(malloc(size));
 	
 	if (size == 0 || pImageCodecInfo == NULL)
 	{
-		return -1;
+		goto GetEncoderClsidOut;
 	}
 
 	Gdiplus::GetImageEncoders(numb, size, pImageCodecInfo);
-
-	int index;
 
 	for (index = 0; index < numb; index++)
 	{
@@ -163,19 +37,19 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid)
 		{
 			*pClsid = pImageCodecInfo[index].Clsid;
 			
-			goto out;
+			goto GetEncoderClsidOut;
 		}
 	}
 
 	index = -1;
 
-out:
+GetEncoderClsidOut:
 	free(pImageCodecInfo);
 	return index;
 }
 
 
-ClipboardStateStatus GetCBData(ClipboardState2& state)
+ClipboardState::Status GetCBData(ClipboardState& state)
 {
 	HANDLE hData;
 	LPVOID pszData;
@@ -184,30 +58,30 @@ ClipboardStateStatus GetCBData(ClipboardState2& state)
 	{
 		if (!IsClipboardFormatAvailable(state.format))
 		{
-			if (IsClipboardFormatAvailable(ClipboardStateFormat::F_UNICODE))
+			if (IsClipboardFormatAvailable(ClipboardState::Format::F_UNICODE))
 			{
-				state.format = ClipboardStateFormat::F_UNICODE;
-				state.status = ClipboardStateStatus::Changed;
+				state.format = ClipboardState::Format::F_UNICODE;
+				state.status = ClipboardState::Status::Changed;
 			}
-			else if(IsClipboardFormatAvailable(ClipboardStateFormat::F_TEXT))
+			else if(IsClipboardFormatAvailable(ClipboardState::Format::F_TEXT))
 			{
-				state.format = ClipboardStateFormat::F_TEXT;
-				state.status = ClipboardStateStatus::Changed;
+				state.format = ClipboardState::Format::F_TEXT;
+				state.status = ClipboardState::Status::Changed;
 			}
-			else if (IsClipboardFormatAvailable(ClipboardStateFormat::F_BITMAP))
+			else if (IsClipboardFormatAvailable(ClipboardState::Format::F_BITMAP))
 			{
-				state.format = ClipboardStateFormat::F_BITMAP;
-				state.status = ClipboardStateStatus::Changed;
+				state.format = ClipboardState::Format::F_BITMAP;
+				state.status = ClipboardState::Status::Changed;
 			}
 			else
 			{
-				state.format = ClipboardStateFormat::F_NONE;
-				state.status = ClipboardStateStatus::NotAvaible;
+				state.format = ClipboardState::Format::F_NONE;
+				state.status = ClipboardState::Status::NotAvaible;
 			}
 		}
 
 
-		if (state.format != ClipboardStateFormat::F_NONE)
+		if (state.format != ClipboardState::Format::F_NONE)
 		{
 			hData = GetClipboardData(state.format);
 			if (hData != nullptr)
@@ -233,7 +107,7 @@ ClipboardStateStatus GetCBData(ClipboardState2& state)
 
 						switch (state.format)
 						{
-							case ClipboardStateFormat::F_TEXT:
+							case ClipboardState::Format::F_TEXT:
 							{
 								state.length = length;
 								state.lpdata = new char[state.length];
@@ -242,7 +116,7 @@ ClipboardStateStatus GetCBData(ClipboardState2& state)
 							};
 							break;
 
-							case ClipboardStateFormat::F_UNICODE:
+							case ClipboardState::Format::F_UNICODE:
 							{
 								state.length = length;
 								state.lpdata = new wchar_t[state.length];
@@ -251,7 +125,7 @@ ClipboardStateStatus GetCBData(ClipboardState2& state)
 							};
 							break;
 
-							case ClipboardStateFormat::F_BITMAP:
+							case ClipboardState::Format::F_BITMAP:
 							{
 								DIB* dibinfo = reinterpret_cast<DIB*>(pszData);
 
@@ -269,12 +143,13 @@ ClipboardStateStatus GetCBData(ClipboardState2& state)
 								state.length = sizeof(BMP);
 								state.lpdata = new BMP(bmp);
 
-								wchar_t filename[256] = L"buffer";
-								wchar_t filepath[256] = L"E:/";
+								wchar_t filename[] = L"bufferimage";
+								wchar_t filepath[] = L"E:/";
 
 								wchar_t filepath_png[256];
 
-								unsigned int timeint = time(NULL);
+
+								time_t timeint = time(NULL);
 
 								swprintf_s(filepath_png, L"%s%s-%d.png", filepath, filename, timeint);
 
@@ -284,6 +159,7 @@ ClipboardStateStatus GetCBData(ClipboardState2& state)
 								BYTE* pDibinfo	 = reinterpret_cast<BYTE*>(dibinfo);
 
 								long offset = sizeof(HEADER);
+
 								std::copy(pBmpHeader, pBmpHeader + offset, buffer);
 								std::copy(pDibinfo,   pDibinfo + (length - offset), buffer + offset);
 
@@ -304,11 +180,11 @@ ClipboardStateStatus GetCBData(ClipboardState2& state)
 						}
 
 
-						state.status = ClipboardStateStatus::Changed;
+						state.status = ClipboardState::Status::Changed;
 					}
 					else
 					{
-						state.status = ClipboardStateStatus::OK;
+						state.status = ClipboardState::Status::OK;
 					}
 
 					// == == == == == == == == == == ==
@@ -326,14 +202,12 @@ ClipboardStateStatus GetCBData(ClipboardState2& state)
 	}
 	else
 	{
-		state.status = ClipboardStateStatus::NotAvaible;
+		state.status = ClipboardState::Status::NotAvaible;
 	}
 
 	return state.status;
 }
 
-
-extern CMODE custom_mode_state;
 
 
 void ClipboadWorker(SOCKET& tcp_connection)
@@ -344,23 +218,23 @@ void ClipboadWorker(SOCKET& tcp_connection)
 	Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
 
 
-	ClipboardState2 state = {
-		.status = ClipboardStateStatus::NotAvaible,
-		.format = ClipboardStateFormat::F_NONE,
+	ClipboardState state = {
+		.status = ClipboardState::Status::NotAvaible,
+		.format = ClipboardState::Format::F_NONE,
 		.length = 0,
 		.lpdata = nullptr,
 	};
 
 	while (true)
 	{
-		if (GetCBData(state) == ClipboardStateStatus::Changed)
+		if (GetCBData(state) == ClipboardState::Status::Changed)
 		{
-			if (state.format == ClipboardStateFormat::F_TEXT)
+			if (state.format == ClipboardState::Format::F_TEXT)
 			{
 				std::wcout << reinterpret_cast<char*>(state.lpdata) << std::endl;
 			}
 			
-			if (state.format == ClipboardStateFormat::F_UNICODE)
+			if (state.format == ClipboardState::Format::F_UNICODE)
 			{
 				std::wcout << reinterpret_cast<wchar_t*>(state.lpdata) << std::endl;
 			}

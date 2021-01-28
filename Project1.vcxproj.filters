@@ -56,5 +56,11 @@
     <ClInclude Include="stdalign.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="images.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="clipboard_structs.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

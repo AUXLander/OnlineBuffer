@@ -32,12 +32,6 @@ int main(int argc, char* argv[])
 {
 	setlocale(LC_ALL, "Russian");
 
-	const char bufstring[] = "skjfoafoipsjdoifjspdfijsdpgds1";
-
-	
-	
-
-
 	int setmode = _setmode(_fileno(stdout), _O_U16TEXT);
 
 	unsigned long inetaddr = inet_addr("192.168.0.10");
