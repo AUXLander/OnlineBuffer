@@ -32,13 +32,13 @@ struct ClipboardState
 	};
 
 	enum class Format : unsigned int {
-		F_NONE,
-		F_TEXT		= CF_TEXT,
-		F_UNICODE	= CF_UNICODETEXT,
-		F_BITMAP	= CF_DIB
+		F_NONE	  = CF_NULL,
+		F_TEXT	  = CF_TEXT,
+		F_UNICODE = CF_UNICODETEXT,
+		F_BITMAP  = CF_DIB
 	};
 
-	static UINT format_constant(ClipboardState::Format __format) 
+	static UINT uint(ClipboardState::Format __format) 
 	{
 		switch (__format)
 		{
@@ -55,28 +55,26 @@ struct ClipboardState
 			case ClipboardState::Format::F_BITMAP:
 			{
 				return CF_DIB;
-			};
-
-			default:
-			{
-				return NULL;
 			}
 		}
+
+		return NULL;
 	}
 
 	Status status;
 	Format format;
 
-	unsigned int length;
+	LPVOID lpdata;
 
 	XXH_hash_t hash;
 
-	LPVOID lpdata;
+	unsigned int length;
 };
-
 
 uint32_t GetClipboardDataLength(ClipboardState::Format format, void* data, void* pszdata)
 {
+	
+
 	switch (format)
 	{
 		case ClipboardState::Format::F_TEXT:

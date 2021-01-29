@@ -8,7 +8,8 @@
 #include "clipboard_structs.h"
 
 
-#pragma pack(2)
+#pragma pack(push, 2)
+
 struct DIB
 {
 	uint32_t biSize;
@@ -37,6 +38,7 @@ struct BMP
 	HEADER header;
 	DIB dib;
 };
+
 #pragma pack(pop) 
 
 

@@ -17,12 +17,12 @@ ClipboardState::Status GetCBData(ClipboardState& state)
 
 	if (OpenClipboard(nullptr))
 	{
-		const auto c_format_value = ClipboardState::format_constant(state.format);
+		const auto c_format_value = ClipboardState::uint(state.format);
 		if (!IsClipboardFormatAvailable(c_format_value))
 		{
-			const auto f_unicode = ClipboardState::format_constant(ClipboardState::Format::F_UNICODE);
-			const auto f_text	 = ClipboardState::format_constant(ClipboardState::Format::F_TEXT);
-			const auto f_bitmap  = ClipboardState::format_constant(ClipboardState::Format::F_BITMAP);
+			const auto f_unicode = ClipboardState::uint(ClipboardState::Format::F_UNICODE);
+			const auto f_text	 = ClipboardState::uint(ClipboardState::Format::F_TEXT);
+			const auto f_bitmap  = ClipboardState::uint(ClipboardState::Format::F_BITMAP);
 
 			if (IsClipboardFormatAvailable(f_unicode))
 			{
@@ -49,7 +49,7 @@ ClipboardState::Status GetCBData(ClipboardState& state)
 
 		if (state.format != ClipboardState::Format::F_NONE)
 		{
-			const auto c_format_value = ClipboardState::format_constant(state.format);
+			const auto c_format_value = ClipboardState::uint(state.format);
 			hData = GetClipboardData(c_format_value);
 
 			if (hData != nullptr)
@@ -119,7 +119,7 @@ ClipboardState::Status GetCBData(ClipboardState& state)
 
 								time_t timeint = time(NULL);
 
-								swprintf_s(filepath_png, L"%s%s-%d.png", filepath, filename, timeint);
+								swprintf_s(filepath_png, L"%s%s-%d.png", filepath, filename, static_cast<unsigned int>(timeint));
 
 								BYTE* buffer = new BYTE[length];
 
@@ -192,6 +192,7 @@ void ClipboadWorker(SOCKET& tcp_connection)
 		.length = 0,
 		.lpdata = nullptr,
 	};
+	
 
 	while (true)
 	{
