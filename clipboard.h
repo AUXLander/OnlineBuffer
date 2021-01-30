@@ -189,8 +189,8 @@ void ClipboadWorker(SOCKET& tcp_connection)
 	ClipboardState state = {
 		.status = ClipboardState::Status::NotAvaible,
 		.format = ClipboardState::Format::F_NONE,
-		.length = 0,
 		.lpdata = nullptr,
+		.length = 0,
 	};
 	
 

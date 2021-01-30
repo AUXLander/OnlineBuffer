@@ -26,8 +26,6 @@ void client_start(SOCKET_PACK* unpack)
 
 			recvcode = recv(tcp_connection, msg, MaxMessageSize, NULL);
 
-			//wprintf
-
 			std::cout << ReadPayload(&msg) << std::endl;
 
 			delete[] msg;
