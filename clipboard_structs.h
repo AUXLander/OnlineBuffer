@@ -73,8 +73,6 @@ struct ClipboardState
 
 uint32_t GetClipboardDataLength(ClipboardState::Format format, void* data, void* pszdata)
 {
-	
-
 	switch (format)
 	{
 		case ClipboardState::Format::F_TEXT:

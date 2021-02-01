@@ -2,15 +2,6 @@
 
 #define MIN(a,b,c) (((a < b) ? (a < c ? a : c) : (b < c ? b : c)))
 
-
-//template<class T> T min(T a, T b) {
-//	return a > b ? b : a;
-//}
-
-//template<class T> T max(T a, T b) {
-//	return a > b ? a : b;
-//}
-
 struct SOCKET_PACK
 {
 	SOCKET& tcp_connection;

@@ -6,6 +6,7 @@
 #include <winsock2.h>
 #include <Windows.h>
 #include "message.h"
+#include "message2.h"
 #include <ctime>
 #include <random>
 
@@ -51,11 +52,13 @@ int recvfromTimeOutUDP(SOCKET socket, long sec, long usec)
 
 	if (__select == -1)
 	{
-		std::cout << "recvfromTimeOutUDP error!" << std::endl;
+		std::wcout << "recvfromTimeOutUDP error!" << std::endl;
 	}
 
 	return __select;
 }
+
+extern unsigned long inetaddr;
 
 CMODE reconnaissance(SOCKET_PACK* unpack)
 {
@@ -108,81 +111,85 @@ CMODE reconnaissance(SOCKET_PACK* unpack)
 
 					default:
 					{
-						const int bfSize = 20;
-						char  cBuffer[bfSize];
-
+						int addr_other_len = sizeof(sockaddr_in);
 						sockaddr_in addr_other;
-						int addr_other_len = sizeof(addr_other);
 
-						int length = recvfrom(udp_connection, cBuffer, bfSize, NULL, reinterpret_cast<SOCKADDR*>(&addr_other), &addr_other_len);
-						if (length > 0 && strcmp(cBuffer, RECCE_MESSAGE_BROADCAST_INVITE) == 0)
+						BYTE* buffer;
+
+						Message2 invite;
+						Message2 accept = {
+							.data = Message2::Data::Control,
+							.hash = XXHM(nullptr, 0, NULL),
+							.type = Message2::Type::BroadcastAccept,
+							.total_length = 0,
+							.offset = 0,
+							.length = 0
+						};
+
+						ReadSingle(udp_connection, invite, &buffer, reinterpret_cast<SOCKADDR*>(&addr_other), &addr_other_len);
+
+						if(invite.data == Message2::Data::Control && invite.type == Message2::Type::BroadcastInvite && inetaddr != addr_other.sin_addr.s_addr)
 						{
-							std::cout << "Got broadcast!" << std::endl;
+							std::wcout << "Got broadcast!" << std::endl;
 
 							tcp_addr.sin_addr.s_addr = addr_other.sin_addr.s_addr;
 
-							int uncstcode = sendto(udp_connection, RECCE_MESSAGE_BROADCAST_ACCEPT, strlen(RECCE_MESSAGE_BROADCAST_ACCEPT) + 1, NULL, reinterpret_cast<SOCKADDR*>(&addr_other), addr_other_len);
+							bool sendcode = SendSingle(udp_connection, nullptr, accept, reinterpret_cast<SOCKADDR*>(&addr_other), sizeof(SOCKADDR));
 
-							return CUSTOM_MODE_CLIENT;
+							if (sendcode)
+							{
+								return CUSTOM_MODE_CLIENT;
+							}
 						}
-						/*else
-						{
-							std::cout << "Got message: " << buffer << std::endl;
-						}*/
 					}
 				}
 			}
 		} 
 		else if (recce_mode == RECCE_SENDING_INVITATIONS)
 		{
-			timeout_duration = rand()* RAND_RANGE_SECONDS* RAND_MAX_DENOMINATOR;
+			timeout_duration = rand() * RAND_RANGE_SECONDS * RAND_MAX_DENOMINATOR;
 
 			package_delay_sec  = 0.5;
 			package_delay_msec = 1000.0 * package_delay_sec;
 
+			Message2 invite = {
+				.data = Message2::Data::Control,
+				.hash = XXHM(nullptr, 0, NULL),
+				.type = Message2::Type::BroadcastInvite,
+				.total_length = 0,
+				.offset = 0,
+				.length = 0
+			};
+
 			while (std::abs(difftime(timeout_start, time(NULL))) < timeout_duration)
 			{
-				int bcstcode = sendto(udp_connection, RECCE_MESSAGE_BROADCAST_INVITE, strlen(RECCE_MESSAGE_BROADCAST_INVITE) + 1, NULL, reinterpret_cast<SOCKADDR*>(&udp_addr_broadcast), sizeof(udp_addr_broadcast));
+				invite.type = Message2::Type::BroadcastInvite;
 
-				if (bcstcode < 0)
-				{
-					std::cout << "Broadcast fault with error no: " << WSAGetLastError() << std::endl;
-				}
+				SendSingle(udp_connection, nullptr, invite, reinterpret_cast<SOCKADDR*>(&udp_addr_broadcast), sizeof(udp_addr_broadcast));
 
 				Sleep(static_cast<DWORD>(package_delay_msec));
 
-				if (udp_fixed_recce_mode == RECCE_MODE_SWTICHEBLE)
+				switch (recvfromTimeOutUDP(udp_connection, static_cast<long>(package_delay_sec), 0))
 				{
-					switch (recvfromTimeOutUDP(udp_connection, static_cast<long>(package_delay_sec), 0))
+					case -1: continue;
+					case  0: continue;
+
+					default:
 					{
-						case -1: continue;
-						case  0: continue;
+						BYTE* buffer;
+						Message2 accept;
 
-						default:
+						ReadSingle(udp_connection, accept, &buffer);
+
+						if (accept.data == Message2::Data::Control && accept.type == Message2::Type::BroadcastAccept)
 						{
-							const int bfSize = 20;
-							char  cBuffer[bfSize];
+							std::wcout << "Go to server mode!" << std::endl;
 
-							int length = recv(udp_connection, cBuffer, bfSize, NULL);
-							if (length > 0 && strcmp(cBuffer, RECCE_MESSAGE_BROADCAST_ACCEPT) == 0)
-							{
-								std::cout << "Go to server mode!" << std::endl;
-
-								return CUSTOM_MODE_SERVER;
-							}
-							/*else
-							{
-								std::cout << "Got message: " << buffer << std::endl;
-							}*/
+							return CUSTOM_MODE_SERVER;
 						}
 					}
 				}
 			}
-		}
-
-		if (udp_fixed_recce_mode == RECCE_MODE_SWTICHEBLE)
-		{
-			recce_mode = !recce_mode;
 		}
 	}
 }

@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fcntl.h>
 #include <io.h>
+#include <functional>
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
@@ -28,13 +29,20 @@
 
 CMODE custom_mode_state = CUSTOM_MODE_UNDEFINED;
 
+unsigned long inetaddr;
+
+std::function<bool(SOCKET& connection, const void** pSource, Message2::Data data, uint32_t length)> Send = [](SOCKET& connection, const void** pSource, Message2::Data data, uint32_t length)
+{
+	return false;
+};
+
 int main(int argc, char* argv[])
 {
-	setlocale(LC_ALL, "Russian");
+	//setlocale(LC_ALL, "Russian");
 
 	int setmode = _setmode(_fileno(stdout), _O_U16TEXT);
 
-	unsigned long inetaddr = inet_addr("192.168.0.10");
+	inetaddr = inet_addr("192.168.0.10");
 
 	WSAData wsaData;
 	int libstat = WSAStartup(MAKEWORD(2, 1), &wsaData);
@@ -44,17 +52,24 @@ int main(int argc, char* argv[])
 		return RT_LIBRARY_LOAD_FAIL;
 	}
 
+	int reccemode;
+
+	custom_mode_state = CUSTOM_MODE_SERVER;
+	
+	
 	if (argc > 1)
 	{
 		if (strcmp(argv[1], "server") == 0)
 		{
 			custom_mode_state = CUSTOM_MODE_SERVER;
+			reccemode = RECCE_MODE_SERVER;
 
 			std::wcout << L"Custom mode: server" << std::endl;
 		}
 		else if (strcmp(argv[1], "client") == 0)
 		{
 			custom_mode_state = CUSTOM_MODE_CLIENT;
+			reccemode = RECCE_MODE_CLIENT;
 
 			std::wcout << L"Custom mode: client" << std::endl;
 		}
@@ -103,7 +118,7 @@ int main(int argc, char* argv[])
 	HANDLE TCPThread;
 	HANDLE UDPThread;
 
-	SOCKET_PACK unpack = { tcp_connection, tcp_addr, tcp_broadcast_addr, NULL, udp_connection, udp_addr, udp_broadcast_addr, CUSTOM_MODE_UNDEFINED };
+	SOCKET_PACK unpack = { tcp_connection, tcp_addr, tcp_broadcast_addr, NULL, udp_connection, udp_addr, udp_broadcast_addr, reccemode };
 
 	int udp_bindcode = bind(udp_connection, reinterpret_cast<SOCKADDR*>(&udp_addr), sizeof(udp_addr));
 
@@ -112,7 +127,7 @@ int main(int argc, char* argv[])
 		return RT_CANNOT_BIND_UDP_SOCKET;
 	}
 
-	//custom_mode_state = reconnaissance(&unpack);
+	custom_mode_state = reconnaissance(&unpack);
 
 	if (custom_mode_state == CUSTOM_MODE_SERVER)
 	{
@@ -125,9 +140,9 @@ int main(int argc, char* argv[])
 
 		TCPThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(server_start), &unpack, NULL, NULL);
 
-		unpack.udp_flag = RECCE_MODE_SERVER;
+		//unpack.udp_flag = RECCE_MODE_SERVER;
 
-		UDPThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(reconnaissance), &unpack, NULL, NULL);
+		//UDPThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(reconnaissance), &unpack, NULL, NULL);
 	}
 	else if (custom_mode_state == CUSTOM_MODE_CLIENT)
 	{

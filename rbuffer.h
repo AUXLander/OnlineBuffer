@@ -108,27 +108,6 @@ public:
 
 	size_t size()
 	{
-		/*size_t size = 0;
-
-		auto pnode = first;
-
-		if (pnode != nullptr)
-		{
-			size = 1;
-
-			while(pnode->next != first)
-			{
-				pnode = pnode->next;
-				size++;
-			}
-		}*/
-		
 		return m_allocated;
-	}
-
-
-	~rbuffer()
-	{
-		
 	}
 };

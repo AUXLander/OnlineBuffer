@@ -13,6 +13,7 @@
 
 #pragma warning( disable : 26812 )
 
+
 #pragma pack(push, 1)
 
 struct Message2
@@ -21,16 +22,19 @@ struct Message2
 
 	enum Data : unsigned char
 	{
-		TextANSI = 0,
-		TextUNICODE = 1,
-		Image = 2,
-		File = 3
+		Control = 0,
+		TextANSI,
+		TextUNICODE,
+		Image,
+		File
 	};
 
 	enum Type : unsigned char
 	{
-		First = 0,
-		Next = 1
+		BroadcastInvite = 0,
+		BroadcastAccept,
+		First,
+		Next
 	};
 
 	Data		 data;
@@ -41,10 +45,19 @@ struct Message2
 	uint32_t	 length;
 };
 
+#pragma pack(pop)
+
 typedef std::pair<Message2, BYTE*> StorageCell;
 typedef std::vector<StorageCell> Storage;
 
-#pragma pack(pop)
+XXH32_hash_t inline XXHM(const void* input, size_t size, XXH32_hash_t seed)
+{
+	return XXH32(input, size, seed);
+}
+
+static const uint32_t BUFFER_SIZE = 2048;
+static const uint32_t sizeofheader = static_cast<uint32_t>(sizeof(Message2));
+
 
 // return size of written bytes without header
 uint32_t WritePayload2(void** pDest, const void** pSource, Message2& message)
@@ -53,9 +66,7 @@ uint32_t WritePayload2(void** pDest, const void** pSource, Message2& message)
 	uint32_t __offset = m_offset;
 	uint32_t w_offset = 0;
 
-	const uint32_t sizeofheader = static_cast<uint32_t>(sizeof(Message2));
-
-	if (__offset < message.total_length && w_offset < Message2::MAX_SIZE)
+	if ((__offset < message.total_length || __offset == 0 && message.total_length == 0) && w_offset < Message2::MAX_SIZE)
 	{
 		uint32_t __portion = std::min(message.total_length - message.offset, Message2::MAX_SIZE - sizeofheader);
 		uint32_t w_portion = __portion + sizeofheader;
@@ -72,54 +83,60 @@ uint32_t WritePayload2(void** pDest, const void** pSource, Message2& message)
 		pHeader->offset = m_offset;
 		pHeader->length = __portion;
 
-		std::copy(reinterpret_cast<const BYTE*>(*pSource) + message.offset, reinterpret_cast<const BYTE*>(*pSource) + message.offset + __portion, pBody);
+		if (pSource != nullptr)
+		{
+			std::copy(reinterpret_cast<const BYTE*>(*pSource) + message.offset, reinterpret_cast<const BYTE*>(*pSource) + message.offset + __portion, pBody);
+		}
 
 		w_offset += w_portion;
 		__offset += __portion;
 	}
 
-	message.offset += __offset - m_offset;
+	message.length = __offset - m_offset;
+	message.offset += message.length;
 
 	return __offset - m_offset;
 }
 
 
-//Message2 ReadMessage2(void** pSource, void** pDest)
-//{
-//	const uint32_t sizeofheader = static_cast<uint32_t>(sizeof(Message2));
-//
-//	Message2* const pHeader = reinterpret_cast<Message2*>(*pSource);
-//	BYTE* const pBody = reinterpret_cast<BYTE*>(*pSource) + sizeofheader;
-//
-//
-//	switch (pHeader->type)
-//	{
-//		case Message2::Type::First:
-//		{
-//
-//		}; break;
-//
-//		case Message2::Type::Next:
-//		{
-//
-//		};
-//		break;
-//
-//		default:
-//		throw new std::string("Unknown type!");
-//	}
-//
-//
-//	return *pHeader;
-//}
-
-
-void ReadSequence(SOCKET& connection, Storage& storage)
+bool ReadSingle(SOCKET& connection, Message2& message, BYTE** buffer, SOCKADDR* from, int* fromlen)
 {
-	char buffer[2560];
+	char pBuffer[BUFFER_SIZE];
 
-	int size = recv(connection, buffer, 2560, NULL);
-	if (size > 0)
+	int recvval = recvfrom(connection, pBuffer, BUFFER_SIZE, NULL, from, fromlen);
+	if (recvval >= 0)
+	{
+		Message2* const pMsg  = reinterpret_cast<Message2*>(pBuffer);
+			BYTE* const pData = reinterpret_cast<BYTE*>(pBuffer) + sizeofheader;
+
+		message.data = pMsg->data;
+		message.hash = pMsg->hash;
+		message.type = pMsg->type;
+		message.total_length = pMsg->total_length;
+		message.offset = pMsg->offset;
+		message.length = pMsg->length;
+
+		*buffer = pData;
+	}
+
+	return false;
+}
+
+bool ReadSingle(SOCKET& connection, Message2& message, BYTE** buffer)
+{
+	int addr_other_len;
+	SOCKADDR addr_other;
+	return ReadSingle(connection, message, buffer, &addr_other, &addr_other_len);
+}
+
+
+
+bool ReadSequence(SOCKET& connection, Storage& storage, Storage::iterator& iterator, SOCKADDR* from, int* fromlen)
+{
+	char buffer[BUFFER_SIZE];
+
+	int recvval = recvfrom(connection, buffer, BUFFER_SIZE, NULL, from, fromlen);
+	if (recvval >= 0)
 	{
 		Message2* msg = reinterpret_cast<Message2*>(buffer);
 
@@ -139,7 +156,7 @@ void ReadSequence(SOCKET& connection, Storage& storage)
 
 				if (itPair < storage.end())
 				{
-					BYTE* pData = reinterpret_cast<BYTE*>(buffer) + sizeof(Message2);
+					BYTE* pData = reinterpret_cast<BYTE*>(buffer) + sizeofheader;
 
 					std::copy(pData, pData + msg->length, itPair->second + msg->offset);
 				}
@@ -151,32 +168,51 @@ void ReadSequence(SOCKET& connection, Storage& storage)
 
 		if (msg->total_length <= (msg->offset + msg->length) && itPair < storage.end())
 		{
-			itPair = itPair;
+			iterator = itPair;
+
+			return true;
 		}
 	}
+
+	return false;
+}
+
+bool ReadSequence(SOCKET& connection, Storage& storage, Storage::iterator& iterator)
+{
+	int addr_other_len;
+	SOCKADDR addr_other;
+	return ReadSequence(connection, storage, iterator, &addr_other, &addr_other_len);
 }
 
 
-bool SendSequence(SOCKET& connection, const void** pSource, Message2::Data data, uint32_t length)
-{
-	Message2 message = {
-		.data = data,
-		.hash = XXH32(*pSource, length, NULL),
-		.type = Message2::Type::First,
-		.total_length = length,
-		.offset = 0
-	};
 
+inline bool SendSingle(SOCKET& connection, const void** pSource, Message2& message, SOCKADDR* to = nullptr, int tolen = 0)
+{
 	void* pBuffer;
 	uint32_t paysize;
 	int	sendcode = 0;
 	bool delta = true;
 
-	while (delta && message.offset < message.total_length && sendcode > SOCKET_ERROR)
+	while (delta && (message.offset < message.total_length || message.offset == 0 && message.total_length == 0) && sendcode > SOCKET_ERROR)
 	{
 		paysize = WritePayload2(&pBuffer, pSource, message);
 
-		sendcode = send(connection, reinterpret_cast<const char*>(pBuffer), paysize, NULL);
+		if (to == nullptr)
+		{
+			sendcode = send(connection, reinterpret_cast<const char*>(pBuffer), paysize + sizeofheader, NULL);
+		}
+		else
+		{
+			sendcode = sendto(connection, reinterpret_cast<const char*>(pBuffer), paysize + sizeofheader, NULL, to, tolen);
+		}
+		
+
+		if (sendcode < 0)
+		{
+			int tt = WSAGetLastError();
+
+			std::wcout << "SendSingle: " << "WSAGetLastError is " << tt << std::endl;
+		}
 
 		message.type = Message2::Type::Next;
 
@@ -188,6 +224,19 @@ bool SendSequence(SOCKET& connection, const void** pSource, Message2::Data data,
 	}
 
 	return sendcode > SOCKET_ERROR;
+}
+
+bool SendSequence(SOCKET& connection, const void** pSource, Message2::Data data, uint32_t length, SOCKADDR* to = nullptr, int tolen = 0)
+{
+	Message2 message = {
+		.data = data,
+		.hash = XXHM(*pSource, length, NULL),
+		.type = Message2::Type::First,
+		.total_length = length,
+		.offset = 0
+	};
+
+	return SendSingle(connection, pSource, message, to, tolen);
 }
 
 void SendString2(SOCKET& connection, std::string str)
