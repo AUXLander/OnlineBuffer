@@ -24,10 +24,10 @@ static size_t lastindex = 0;
 static const int maxconnlen = 6;
 static rbuffer<client> cpull(maxconnlen);
 
-extern std::function<bool(SOCKET& connection, const void** pSource, Message2::Data data, uint32_t length)> Send;
+extern std::function<bool(SOCKET& connection, const void*& pSource, Message::Data data, uint32_t length)> Send;
 
 
-bool SendSequenceEachClient(SOCKET& connection, const void** pSource, Message2::Data data, uint32_t length)
+bool SendSequenceEachClient(SOCKET& connection, const void*& pSource, Message::Data data, uint32_t length)
 {
 	const auto pfirst = cpull.pFirst();
 		  auto cnode  = pfirst;
@@ -67,30 +67,34 @@ static DWORD receiver(client *object)
 	while (true)
 	{
 		Storage::iterator iterator;
-		ReadSequence(object->connection, storage, iterator);
 
-		StorageCell& cell = *iterator;
+		bool status = ReadSequence(object->connection, storage, iterator);
 
-		SendSequenceEachClient(object->connection, const_cast<const void**>(reinterpret_cast<void**>(&cell.second)), cell.first.data, cell.first.total_length);
-		
-		if (cell.first.type == Message2::Data::TextUNICODE)
+		if (status)
 		{
-			wchar_t* unicode_str = reinterpret_cast<wchar_t*>(cell.second);
+			StorageCell& cell = *iterator;
 
-			std::wcout << unicode_str << std::endl;
+			SendSequenceEachClient(object->connection, reinterpret_cast<const void*&>(cell.second), cell.first.data, cell.first.total_length);
+
+			if (cell.first.type == Message::Data::TextUNICODE)
+			{
+				std::wcout << reinterpret_cast<const wchar_t*>(cell.second) << std::endl;
+			}
+			else if (cell.first.type == Message::Data::TextANSI)
+			{
+				std::wcout << reinterpret_cast<const char*>(cell.second) << std::endl;
+			}
+			else if (cell.first.type == Message::Data::Image)
+			{
+				std::wcout << "Image!" << std::endl;
+			}
+			else if (cell.first.type == Message::Data::File)
+			{
+				std::wcout << "File!" << std::endl;
+			}
 		}
-		else if (cell.first.type == Message2::Data::TextANSI)
-		{
-			std::wcout << reinterpret_cast<char *>(cell.second) << std::endl;
-		}
-		else if (cell.first.type == Message2::Data::Image)
-		{
-			std::wcout << "Image!" << std::endl;
-		}
-		else if (cell.first.type == Message2::Data::File)
-		{
-			std::wcout << "File!" << std::endl;
-		}
+
+		storage.erase(iterator);
 	}
 
 	std::wcout << "Thread #" << object->index << " closed connection with code: " << WSAGetLastError() << std::endl;
@@ -104,7 +108,7 @@ void server_start(SOCKET_PACK* unpack)
 	SOCKET& tcp_connection = unpack->tcp_connection;
 	SOCKADDR_IN& tcp_addr  = unpack->tcp_addr;
 
-	Send = [](SOCKET& connection, const void** pSource, Message2::Data data, uint32_t length)
+	Send = [](SOCKET& connection, const void*& pSource, Message::Data data, uint32_t length)
 	{
 		return SendSequenceEachClient(connection, pSource, data, length);
 	};
@@ -166,7 +170,7 @@ void server_start(SOCKET_PACK* unpack)
 				std::string text = "Error: failed to allocate new connection!";
 				std::wcout << text.c_str() << std::endl;
 
-				SendString2(n_connection, text);
+				SendString(n_connection, text);
 
 				closesocket(n_connection);
 			}
@@ -189,7 +193,7 @@ void server_start(SOCKET_PACK* unpack)
 				std::string  text = "Successful connection!";
 				std::wcout << text.c_str() << std::endl;
 
-				SendString2(cnode->object->connection, text);
+				SendString(cnode->object->connection, text);
 
 				cnode->object->thread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(receiver), cnode->object, NULL, NULL);
 			}

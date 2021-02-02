@@ -8,7 +8,7 @@
 
 typedef XXH64_hash_t XXH_hash_t;
 
-XXH_hash_t inline XXH(const void* input, size_t size, XXH_hash_t seed)
+XXH_hash_t __forceinline XXH(const void* input, size_t size, XXH_hash_t seed)
 {
 	return XXH3_64bits(input, size);
 }
@@ -16,7 +16,7 @@ XXH_hash_t inline XXH(const void* input, size_t size, XXH_hash_t seed)
 
 typedef XXH32_hash_t XXH_hash_t;
 
-XXH_hash_t inline XXH(const void* input, size_t size, XXH_hash_t seed)
+XXH_hash_t __forceinline XXH(const void* input, size_t size, XXH_hash_t seed)
 {
 	return XXH32(input, size, seed);
 }

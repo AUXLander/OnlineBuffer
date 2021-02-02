@@ -31,7 +31,7 @@ CMODE custom_mode_state = CUSTOM_MODE_UNDEFINED;
 
 unsigned long inetaddr;
 
-std::function<bool(SOCKET& connection, const void** pSource, Message2::Data data, uint32_t length)> Send = [](SOCKET& connection, const void** pSource, Message2::Data data, uint32_t length)
+std::function<bool(SOCKET& connection, const void*& pSource, Message::Data data, uint32_t length)> Send = [](SOCKET& connection, const void*& pSource, Message::Data data, uint32_t length)
 {
 	return false;
 };
@@ -55,8 +55,8 @@ int main(int argc, char* argv[])
 	int reccemode;
 
 	custom_mode_state = CUSTOM_MODE_SERVER;
-	
-	
+
+
 	if (argc > 1)
 	{
 		if (strcmp(argv[1], "server") == 0)
@@ -82,22 +82,22 @@ int main(int argc, char* argv[])
 
 	SOCKADDR_IN tcp_addr = {
 		.sin_family = AF_INET,
-		.sin_port	= htons(static_cast<u_short>(1111))
+		.sin_port = htons(static_cast<u_short>(1111))
 	};
 
 	SOCKADDR_IN udp_addr = {
 		.sin_family = AF_INET,
-		.sin_port	= htons(static_cast<u_short>(1112))
+		.sin_port = htons(static_cast<u_short>(1112))
 	};
 
 	SOCKADDR_IN tcp_broadcast_addr = {
 		.sin_family = NULL,
-		.sin_port	= NULL
+		.sin_port = NULL
 	};
 
 	SOCKADDR_IN udp_broadcast_addr = {
 		.sin_family = AF_INET,
-		.sin_port	= htons(static_cast<u_short>(1112))
+		.sin_port = htons(static_cast<u_short>(1112))
 	};
 
 	tcp_addr.sin_addr.s_addr = inetaddr; // inet_addr("192.168.0.10");
@@ -115,8 +115,8 @@ int main(int argc, char* argv[])
 		return RT_SOCKETOPT_FAILURE;
 	}
 
-	HANDLE TCPThread;
 	HANDLE UDPThread;
+	HANDLE ClipboardThread;
 
 	SOCKET_PACK unpack = { tcp_connection, tcp_addr, tcp_broadcast_addr, NULL, udp_connection, udp_addr, udp_broadcast_addr, reccemode };
 
@@ -129,6 +129,9 @@ int main(int argc, char* argv[])
 
 	custom_mode_state = reconnaissance(&unpack);
 
+	ClipboardThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(ClipboadWorker), &tcp_connection, NULL, NULL);
+
+
 	if (custom_mode_state == CUSTOM_MODE_SERVER)
 	{
 		int tcp_bindcode = bind(tcp_connection, reinterpret_cast<SOCKADDR*>(&tcp_addr), sizeof(tcp_addr));
@@ -137,20 +140,23 @@ int main(int argc, char* argv[])
 		{
 			return RT_CANNOT_BIND_TCP_SOCKET;
 		}
+		
+		server_start(&unpack);
 
-		TCPThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(server_start), &unpack, NULL, NULL);
+		//TCPThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(), , NULL, NULL);
 
-		//unpack.udp_flag = RECCE_MODE_SERVER;
+		unpack.udp_flag = RECCE_MODE_SERVER;
 
-		//UDPThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(reconnaissance), &unpack, NULL, NULL);
+		UDPThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(reconnaissance), &unpack, NULL, NULL);
 	}
 	else if (custom_mode_state == CUSTOM_MODE_CLIENT)
 	{
-		TCPThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(client_start), &unpack, NULL, NULL);
+		client_start(&unpack);
+		//TCPThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(), , NULL, NULL);
 	}
 
 
-	ClipboadWorker(tcp_connection);
+	//ClipboadWorker(tcp_connection);
 
 
 	system("pause");

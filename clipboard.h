@@ -11,7 +11,7 @@
 #include "images.h"
 
 
-extern std::function<bool(SOCKET& connection, const void** pSource, Message2::Data data, uint32_t length)> Send;
+extern std::function<bool(SOCKET& connection, const void*& pSource, Message::Data data, uint32_t length)> Send;
 
 ClipboardState::Status GetCBData(ClipboardState& state)
 {
@@ -205,14 +205,14 @@ void ClipboadWorker(SOCKET& tcp_connection)
 			{
 				std::wcout << reinterpret_cast<char*>(state.lpdata) << std::endl;
 
-				Send(tcp_connection, const_cast<const void**>(&state.lpdata), Message2::Data::TextANSI, state.length * sizeof(char));
+				Send(tcp_connection, const_cast<const void*&>(state.lpdata), Message::Data::TextANSI, state.length * sizeof(char));
 			}
 			
 			if (state.format == ClipboardState::Format::F_UNICODE)
 			{
 				std::wcout << reinterpret_cast<wchar_t*>(state.lpdata) << std::endl;
 
-				Send(tcp_connection, const_cast<const void**>(&state.lpdata), Message2::Data::TextUNICODE, state.length * sizeof(wchar_t));
+				Send(tcp_connection, const_cast<const void*&>(state.lpdata), Message::Data::TextUNICODE, state.length * sizeof(wchar_t));
 			}
 		}
 

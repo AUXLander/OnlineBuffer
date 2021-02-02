@@ -60,6 +60,10 @@ int recvfromTimeOutUDP(SOCKET socket, long sec, long usec)
 
 extern unsigned long inetaddr;
 
+const int& toReference(int* pointer) {
+	return *pointer;
+}
+
 CMODE reconnaissance(SOCKET_PACK* unpack)
 {
 	auto& [tcp_connection, tcp_addr, tcp_addr_broadcast, tcp_unused_flag, udp_connection, udp_addr, udp_addr_broadcast, udp_fixed_recce_mode] = *unpack;
@@ -116,25 +120,27 @@ CMODE reconnaissance(SOCKET_PACK* unpack)
 
 						BYTE* buffer;
 
-						Message2 invite;
-						Message2 accept = {
-							.data = Message2::Data::Control,
+						Message invite;
+						Message accept = {
+							.data = Message::Data::Control,
 							.hash = XXHM(nullptr, 0, NULL),
-							.type = Message2::Type::BroadcastAccept,
+							.type = Message::Type::BroadcastAccept,
 							.total_length = 0,
 							.offset = 0,
 							.length = 0
 						};
 
-						ReadSingle(udp_connection, invite, &buffer, reinterpret_cast<SOCKADDR*>(&addr_other), &addr_other_len);
+						ReadSingle(udp_connection, invite, buffer, reinterpret_cast<SOCKADDR*>(&addr_other), &addr_other_len);
 
-						if(invite.data == Message2::Data::Control && invite.type == Message2::Type::BroadcastInvite && inetaddr != addr_other.sin_addr.s_addr)
+						if(invite.data == Message::Data::Control && invite.type == Message::Type::BroadcastInvite && inetaddr != addr_other.sin_addr.s_addr)
 						{
 							std::wcout << "Got broadcast!" << std::endl;
 
 							tcp_addr.sin_addr.s_addr = addr_other.sin_addr.s_addr;
 
-							bool sendcode = SendSingle(udp_connection, nullptr, accept, reinterpret_cast<SOCKADDR*>(&addr_other), sizeof(SOCKADDR));
+							const void* ref = nullptr;
+
+							bool sendcode = SendSingle(udp_connection, ref, accept, reinterpret_cast<SOCKADDR*>(&addr_other), sizeof(SOCKADDR));
 
 							if (sendcode)
 							{
@@ -152,10 +158,10 @@ CMODE reconnaissance(SOCKET_PACK* unpack)
 			package_delay_sec  = 0.5;
 			package_delay_msec = 1000.0 * package_delay_sec;
 
-			Message2 invite = {
-				.data = Message2::Data::Control,
+			Message invite = {
+				.data = Message::Data::Control,
 				.hash = XXHM(nullptr, 0, NULL),
-				.type = Message2::Type::BroadcastInvite,
+				.type = Message::Type::BroadcastInvite,
 				.total_length = 0,
 				.offset = 0,
 				.length = 0
@@ -163,9 +169,11 @@ CMODE reconnaissance(SOCKET_PACK* unpack)
 
 			while (std::abs(difftime(timeout_start, time(NULL))) < timeout_duration)
 			{
-				invite.type = Message2::Type::BroadcastInvite;
+				invite.type = Message::Type::BroadcastInvite;
 
-				SendSingle(udp_connection, nullptr, invite, reinterpret_cast<SOCKADDR*>(&udp_addr_broadcast), sizeof(udp_addr_broadcast));
+				const void* ref = nullptr;
+
+				SendSingle(udp_connection, ref, invite, reinterpret_cast<SOCKADDR*>(&udp_addr_broadcast), sizeof(udp_addr_broadcast));
 
 				Sleep(static_cast<DWORD>(package_delay_msec));
 
@@ -177,11 +185,11 @@ CMODE reconnaissance(SOCKET_PACK* unpack)
 					default:
 					{
 						BYTE* buffer;
-						Message2 accept;
+						Message accept;
 
-						ReadSingle(udp_connection, accept, &buffer);
+						ReadSingle(udp_connection, accept, buffer);
 
-						if (accept.data == Message2::Data::Control && accept.type == Message2::Type::BroadcastAccept)
+						if (accept.data == Message::Data::Control && accept.type == Message::Type::BroadcastAccept)
 						{
 							std::wcout << "Go to server mode!" << std::endl;
 
