@@ -2,7 +2,7 @@
 
 #include <iostream>
 #include <Windows.h>
-#include "message2.h"
+#include "message.h"
 
 extern std::function<bool(SOCKET& connection, const void*& pSource, Message::Data data, uint32_t length)> Send;
 

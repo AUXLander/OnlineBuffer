@@ -166,7 +166,6 @@
     <ClInclude Include="helpers.h" />
     <ClInclude Include="images.h" />
     <ClInclude Include="message.h" />
-    <ClInclude Include="message2.h" />
     <ClInclude Include="rbuffer.h" />
     <ClInclude Include="reconnaissance.h" />
     <ClInclude Include="server.h" />

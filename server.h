@@ -3,9 +3,8 @@
 #include <vector>
 #include <iostream>
 #include <Windows.h>
-#include "message.h"
 #include "rbuffer.h"
-#include "message2.h"
+#include "message.h"
 
 #define THREAD_CLOSED WAIT_OBJECT_0
 #define CONNECTION_CLOSED 0

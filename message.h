@@ -1,218 +1,297 @@
-//#pragma once
-//#include <cstdint>
-//#include <string>
-//#include "helpers.h"
-//
-//enum class DataType : uint8_t
-//{
-//	CF__TEXT		= 1,
-//	CF__BITMAP		= 2,
-//	CF__RAWFILE		= 3
-//};
-//
-//enum class MessageType : uint8_t
-//{
-//	Announce = 1,
-//	Transfer = 2
-//};
-//
-//const uint16_t MaxMessageSize = 1024U;
-//
-//#pragma pack(push, 1)
-//
-//struct MetaMessage
-//{
-//	DataType	 data;
-//	MessageType  message;
-//
-//	uint16_t	 reserved_1;
-//	uint16_t	 length;
-//};
-//
-//template<MessageType MT, DataType DT> struct Message
-//{
-//	uint8_t  data	 = static_cast<uint8_t>(DT);
-//	uint8_t  message = static_cast<uint8_t>(MT);
-//
-//	uint16_t reserved_1;
-//	uint16_t length;
-//};
-//
-//template<DataType DT> struct Message<MessageType::Announce, DT>
-//{
-//	uint8_t  data	 = static_cast<uint8_t>(DT);
-//	uint8_t  message = static_cast<uint8_t>(MessageType::Announce);
-//
-//	uint16_t size;
-//	uint16_t length;
-//};
-//
-//template<DataType DT> struct Message<MessageType::Transfer, DT>
-//{
-//	uint8_t  data	 = static_cast<uint8_t>(DT);
-//	uint8_t  message = static_cast<uint8_t>(MessageType::Transfer);
-//
-//	uint16_t offset;
-//	uint16_t length;
-//};
-//
-//#pragma pack(pop)
-//
-//size_t WritePayload(char** pDest, std::string& message, uint16_t length = 65535, int offset = 0)
-//{
-//	DataType	dtype = DataType::CF__TEXT;
-//	MessageType mtype = offset > 0 ? MessageType::Transfer : MessageType::Announce;
-//
-//	int		 tsize = static_cast<int>(message.size()); // total size of message
-//	uint16_t hsize = sizeof(Message<MessageType::Announce, DataType::CF__TEXT>); // // size of payload header part (1/2)
-//	uint16_t msize = MIN(static_cast<uint16_t>(std::max(tsize - offset, 0)), MaxMessageSize - hsize, length); // size of payload message part (2/2)
-//	uint16_t size  = msize + hsize; // total size of payload (header + message)
-//
-//	if (msize > 1)
-//	{
-//		*pDest = new char[size];
-//
-//		char* pPayload = *pDest + hsize;
-//
-//		if (mtype == MessageType::Announce)
-//		{
-//			auto pAMsg		= reinterpret_cast<Message<MessageType::Announce, DataType::CF__TEXT>*>(*pDest);
-//
-//			pAMsg->data		= static_cast<uint8_t>(dtype);
-//			pAMsg->message  = static_cast<uint8_t>(mtype);
-//			pAMsg->size		= static_cast<uint16_t>(tsize);
-//			pAMsg->length	= static_cast<uint16_t>(msize);
-//		}
-//		else if (mtype == MessageType::Transfer)
-//		{
-//			auto pAMsg		= reinterpret_cast<Message<MessageType::Transfer, DataType::CF__TEXT>*>(*pDest);
-//
-//			pAMsg->data		= static_cast<uint8_t>(dtype);
-//			pAMsg->message	= static_cast<uint8_t>(mtype);
-//			pAMsg->offset	= offset;
-//			pAMsg->length	= msize;
-//		}
-//
-//		std::copy(message.c_str() + offset, message.c_str() + msize + offset, pPayload);
-//
-//		return size;
-//	}
-//
-//	return 0;
-//}
-//
-//
-//std::string ReadPayload(char** ptr)
-//{
-//	DataType   DataType = reinterpret_cast<MetaMessage*>(*ptr)->data;
-//	MessageType MsgType = reinterpret_cast<MetaMessage*>(*ptr)->message;
-//
-//	if (DataType == DataType::CF__TEXT && MsgType == MessageType::Announce)
-//	{
-//		Message<MessageType::Announce, DataType::CF__TEXT>* pMessage = reinterpret_cast<Message<MessageType::Announce, DataType::CF__TEXT>*>(*ptr);
-//
-//		char* pPayload = *ptr + sizeof(Message<MessageType::Announce, DataType::CF__TEXT>);
-//
-//		size_t size   = pMessage->size;
-//		size_t length = pMessage->length;
-//
-//		return std::string(pPayload, pPayload + length);
-//	}
-//
-//	return std::string();
-//}
-//
-//
-//int SendString(SOCKET& connection, std::string message, char** buffer)
-//{
-//	int offset = 0;
-//	int	sendcode = 0;
-//
-//	size_t message_size = message.size();
-//	size_t payload_size = WritePayload(buffer, message, MaxMessageSize, offset);
-//
-//	while (payload_size > 0 && sendcode >= 0)
-//	{
-//		sendcode = send(connection, *buffer, payload_size, NULL);
-//
-//		Sleep(10);
-//
-//		delete[] * buffer;
-//
-//		offset += sendcode;
-//
-//		payload_size = WritePayload(buffer, message, MaxMessageSize, offset);
-//	}
-//
-//	return sendcode;
-//}
-//
-//
-//template<DataType DTYPE> 
-//size_t WritePayload(char* pSource, char** pDest, size_t length, int offset)
-//{
-//	MessageType mtype = offset > 0 ? MessageType::Transfer : MessageType::Announce;
-//
-//	int		 tsize = static_cast<int>(length); // total size of data
-//	uint16_t hsize = sizeof(Message<MessageType::Announce, DTYPE>); // size of payload header part (1/2)
-//	uint16_t msize = MIN(static_cast<uint16_t>(std::max(tsize - offset, 0)), MaxMessageSize - hsize, length); // size of payload message part (2/2)
-//	uint16_t size  = msize + hsize; // total size of payload (header + message)
-//
-//	if (msize > 1)
-//	{
-//		*pDest = new char[size];
-//
-//		char* pPayload = *pDest + hsize;
-//
-//		if (mtype == MessageType::Announce)
-//		{
-//			auto pAMsg = reinterpret_cast<Message<MessageType::Announce, DTYPE>*>(*pDest);
-//
-//			pAMsg->data		= static_cast<uint8_t>(DTYPE);
-//			pAMsg->message	= static_cast<uint8_t>(mtype);
-//			pAMsg->size		= static_cast<uint16_t>(tsize);
-//			pAMsg->length	= static_cast<uint16_t>(msize);
-//		}
-//		else if (mtype == MessageType::Transfer)
-//		{
-//			auto pAMsg = reinterpret_cast<Message<MessageType::Transfer, DTYPE>*>(*pDest);
-//
-//			pAMsg->data		= static_cast<uint8_t>(DTYPE);
-//			pAMsg->message	= static_cast<uint8_t>(mtype);
-//			pAMsg->offset	= static_cast<uint16_t>(offset);
-//			pAMsg->length	= static_cast<uint16_t>(msize);
-//		}
-//
-//		std::copy(pSource + offset, pSource + msize + offset, pPayload);
-//
-//		return size;
-//	}
-//
-//	return 0;
-//}
-//
-//
-//template<DataType DTYPE>
-//int SendData(SOCKET& connection, char* pSource, char** pBuffer, size_t size)
-//{
-//	int offset = 0;
-//	int	sendcode = 0;
-//
-//	size_t payload_size;
-//
-//	do
-//	{
-//		payload_size = WritePayload<DTYPE>(pSource, pBuffer, MIN(size, size, MaxMessageSize), offset);
-//
-//		sendcode = send(connection, *pBuffer, payload_size, NULL);
-//
-//		delete[] *pBuffer;
-//
-//		offset  += sendcode;
-//
-//		Sleep(10);
-//
-//	} while ((sendcode > SOCKET_ERROR) && (size + sizeof(Message<MessageType::Announce, DTYPE>) - payload_size) > 0);
-//
-//	return sendcode;
-//}
+#pragma once
+#include <cstdint>
+#include <string>
+#include <Windows.h>
+#include <vector>
+
+#undef min
+#undef max
+
+#include <algorithm>
+
+#include "xxhash.h"
+
+#pragma warning( disable : 26812 )
+
+
+#pragma pack(push, 1)
+
+struct Message
+{
+	const static uint32_t MAX_SIZE = 1024;
+
+	enum Data : unsigned char
+	{
+		Control = 0,
+		TextANSI,
+		TextUNICODE,
+		Image,
+		File
+	};
+
+	enum Type : unsigned char
+	{
+		BroadcastInvite = 0,
+		BroadcastAccept,
+		First,
+		Next
+	};
+
+	Data		 data;
+	XXH32_hash_t hash;
+	Type		 type;
+	uint32_t	 total_length;
+	uint32_t	 offset;
+	uint32_t	 length;
+};
+
+struct StorageMessage : public Message
+{
+	time_t timestamp;
+
+	StorageMessage(Message* pObject, time_t time) : Message(*pObject), timestamp(time) {}
+};
+
+#pragma pack(pop)
+
+typedef std::pair<StorageMessage, const BYTE*> StorageCell;
+typedef std::vector<StorageCell> Storage;
+
+XXH32_hash_t __forceinline XXHM(const void* input, size_t size, XXH32_hash_t seed)
+{
+	return XXH32(input, size, seed);
+}
+
+static const uint32_t BUFFER_SIZE = 2048;
+static const uint32_t sizeofheader = static_cast<uint32_t>(sizeof(Message));
+static const time_t   timeout_secs = 30;
+
+
+// return size of written bytes without header
+uint32_t WritePayload(void*& pDest, const void*& pSource, Message& message)
+{
+	const uint32_t m_offset = std::min(message.offset, message.total_length);
+
+	uint32_t __offset = m_offset;
+	uint32_t w_offset = 0;
+
+	const bool isSeekEnd = (__offset < message.total_length);
+	const bool isOverflowed = (message.length + sizeofheader < Message::MAX_SIZE);
+
+	const bool isBroadcastException = (__offset == 0 && message.total_length == 0);
+
+	if (isBroadcastException || isSeekEnd && isOverflowed)
+	{
+		uint32_t __portion = std::min(message.total_length - message.offset, Message::MAX_SIZE - sizeofheader);
+		uint32_t w_portion = __portion + sizeofheader;
+
+		pDest = new BYTE[w_portion];
+
+		Message* const pHeader = reinterpret_cast<Message*>(pDest);
+		BYTE*	  const pBody	= reinterpret_cast<BYTE*>(pDest) + sizeofheader;
+
+		std::copy(&message, &message + sizeofheader, pHeader);
+
+		pHeader->offset = m_offset;
+		pHeader->length = __portion;
+
+		if (pSource != nullptr && message.total_length > 0 && message.length > 0)
+		{
+			const BYTE* pSourceBody = reinterpret_cast<const BYTE*>(pSource) + message.offset;
+			
+			std::copy(pSourceBody, pSourceBody + __portion, pBody);
+		}
+
+		w_offset += w_portion;
+		__offset += __portion;
+	}
+
+	message.length = __offset - m_offset;
+	message.offset += message.length;
+
+	return __offset - m_offset;
+}
+
+
+bool ReadSingle(SOCKET& connection, Message& message, BYTE*& buffer, SOCKADDR* from, int* fromlen)
+{
+	char pBuffer[BUFFER_SIZE];
+
+	int recvval = recvfrom(connection, pBuffer, BUFFER_SIZE, NULL, from, fromlen);
+	if (recvval >= sizeofheader)
+	{
+		Message* const pMsg  = reinterpret_cast<Message*>(pBuffer);
+
+		std::copy(pMsg, pMsg + sizeofheader, &message);
+
+		buffer = reinterpret_cast<BYTE*>(pBuffer) + sizeofheader;
+	}
+
+	return false;
+}
+
+bool ReadSingle(SOCKET& connection, Message& message, BYTE*& buffer)
+{
+	int addr_other_len;
+	SOCKADDR addr_other;
+	return ReadSingle(connection, message, buffer, &addr_other, &addr_other_len);
+}
+
+
+
+bool ReadSequence(SOCKET& connection, Storage& storage, Storage::iterator& iterator, SOCKADDR* from, int* fromlen)
+{
+	char buffer[BUFFER_SIZE];
+
+	int recvval = recvfrom(connection, buffer, BUFFER_SIZE, NULL, from, fromlen);
+	if (recvval >= sizeofheader)
+	{
+		Message* message = reinterpret_cast<Message*>(buffer);
+
+		Storage::iterator pivot;
+
+		switch (message->type)
+		{
+			case Message::Type::First:
+			{
+				storage.emplace_back(StorageCell({ {message, time(NULL)}, new BYTE[message->total_length] }));
+			};
+			__fallthrough;
+
+			case Message::Type::Next:
+			{
+				time_t __time = time(NULL);
+				pivot = std::begin(storage);
+
+				auto __filter = [&](auto& pair)
+				{
+					if (pair.first.hash != message->hash)
+					{
+						const bool verifyObject = (pivot->first.hash == pair.first.hash);
+						const bool isTimeouted  = (pair.first.timestamp - __time) > timeout_secs;
+
+						if (isTimeouted && verifyObject)
+						{
+							storage.erase(pivot);
+						}
+						else
+						{
+							++pivot;
+						}
+
+						return false;
+					}
+
+					return true;
+				};
+
+				pivot = std::find_if(std::begin(storage), std::end(storage), __filter);
+
+				if (pivot < storage.end())
+				{
+					BYTE* const pSource = reinterpret_cast<BYTE*>(buffer) + sizeofheader;
+					BYTE* const pDest	= const_cast<BYTE*>(pivot->second + message->offset);
+
+					std::copy(pSource, pSource + message->length, pDest);
+				}
+			};
+			break;
+
+			default: throw new std::string("Unknown type!");
+		}
+
+		if (message->total_length <= ((message->offset + message->length)))
+		{
+			if (pivot < storage.end())
+			{
+				const XXH32_hash_t lhash = XXHM(pivot->second, pivot->first.total_length, NULL);
+
+				if (pivot->first.hash == lhash)
+				{
+					iterator = pivot;
+
+					return true;
+				}
+				else
+				{
+					std::wcout << "Bad hash!" << std::endl;
+
+					storage.erase(pivot);
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
+bool ReadSequence(SOCKET& connection, Storage& storage, Storage::iterator& iterator)
+{
+	int addr_other_len;
+	SOCKADDR addr_other;
+	return ReadSequence(connection, storage, iterator, &addr_other, &addr_other_len);
+}
+
+
+
+inline bool SendSingle(SOCKET& connection, const void*& pSource, Message& message, SOCKADDR* to = nullptr, int tolen = 0)
+{
+	void* pBuffer;
+	int	sendcode = 0;
+	uint32_t paysize;
+
+	const bool isBroadcastException = (message.offset == 0 && message.total_length == 0);
+	auto isOverflowed = [&message]() -> bool { return message.offset > message.total_length; };
+
+	if (!isOverflowed()) do
+	{
+		paysize = WritePayload(pBuffer, pSource, message);
+
+		if (paysize > 0 || isBroadcastException)
+		{
+			if (to == nullptr)
+			{
+				sendcode = send(connection, reinterpret_cast<const char*>(pBuffer), paysize + sizeofheader, NULL);
+			}
+			else
+			{
+				sendcode = sendto(connection, reinterpret_cast<const char*>(pBuffer), paysize + sizeofheader, NULL, to, tolen);
+			}
+
+			if (sendcode == SOCKET_ERROR)
+			{
+				std::wcout << "SendSingle: WSAGetLastError is " << WSAGetLastError() << std::endl;
+			}
+			else
+			{
+				message.type = Message::Type::Next;
+			}
+		}
+
+		delete[] pBuffer;
+
+		Sleep(10);
+	}
+	while (paysize > 0 && !isOverflowed() && sendcode > SOCKET_ERROR);
+
+	return sendcode > SOCKET_ERROR;
+}
+
+bool SendSequence(SOCKET& connection, const void*& pSource, Message::Data data, uint32_t length, SOCKADDR* to = nullptr, int tolen = 0)
+{
+	Message message = {
+		.data = data,
+		.hash = XXHM(pSource, length, NULL),
+		.type = Message::Type::First,
+		.total_length = length,
+		.offset = 0
+	};
+
+	return SendSingle(connection, pSource, message, to, tolen);
+}
+
+void SendString(SOCKET& connection, std::string str)
+{
+	const char* str_c = str.c_str();
+	SendSequence(connection, reinterpret_cast<const void*&>(str_c), Message::Data::TextUNICODE, str.size() + 1);
+}
