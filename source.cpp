@@ -52,24 +52,24 @@ int main(int argc, char* argv[])
 		return RT_LIBRARY_LOAD_FAIL;
 	}
 
-	int reccemode;
+	bool reccemode = false;
 
 	custom_mode_state = CUSTOM_MODE_SERVER;
-
+	reccemode = RECCE_SENDING_INVITATIONS;
 
 	if (argc > 1)
 	{
 		if (strcmp(argv[1], "server") == 0)
 		{
 			custom_mode_state = CUSTOM_MODE_SERVER;
-			reccemode = RECCE_MODE_SERVER;
+			reccemode = RECCE_SENDING_INVITATIONS;
 
 			std::wcout << L"Custom mode: server" << std::endl;
 		}
 		else if (strcmp(argv[1], "client") == 0)
 		{
 			custom_mode_state = CUSTOM_MODE_CLIENT;
-			reccemode = RECCE_MODE_CLIENT;
+			reccemode = RECCE_WAIT_FOR_INVITE;
 
 			std::wcout << L"Custom mode: client" << std::endl;
 		}
@@ -131,7 +131,6 @@ int main(int argc, char* argv[])
 
 	ClipboardThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(ClipboadWorker), &tcp_connection, NULL, NULL);
 
-
 	if (custom_mode_state == CUSTOM_MODE_SERVER)
 	{
 		int tcp_bindcode = bind(tcp_connection, reinterpret_cast<SOCKADDR*>(&tcp_addr), sizeof(tcp_addr));
@@ -143,8 +142,6 @@ int main(int argc, char* argv[])
 		
 		server_start(&unpack);
 
-		//TCPThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(), , NULL, NULL);
-
 		unpack.udp_flag = RECCE_MODE_SERVER;
 
 		UDPThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(reconnaissance), &unpack, NULL, NULL);
@@ -152,12 +149,7 @@ int main(int argc, char* argv[])
 	else if (custom_mode_state == CUSTOM_MODE_CLIENT)
 	{
 		client_start(&unpack);
-		//TCPThread = CreateThread(NULL, NULL, reinterpret_cast<LPTHREAD_START_ROUTINE>(), , NULL, NULL);
 	}
-
-
-	//ClipboadWorker(tcp_connection);
-
 
 	system("pause");
 

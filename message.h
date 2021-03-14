@@ -76,30 +76,30 @@ uint32_t WritePayload(void*& pDest, const void*& pSource, Message& message)
 	uint32_t w_offset = 0;
 
 	const bool isSeekEnd = (__offset < message.total_length);
-	const bool isOverflowed = (message.length + sizeofheader < Message::MAX_SIZE);
+	const bool isOverflowed = (message.length + sizeofheader > Message::MAX_SIZE);
 
 	const bool isBroadcastException = (__offset == 0 && message.total_length == 0);
 
-	if (isBroadcastException || isSeekEnd && isOverflowed)
+	if (isBroadcastException || isSeekEnd && !isOverflowed)
 	{
 		uint32_t __portion = std::min(message.total_length - message.offset, Message::MAX_SIZE - sizeofheader);
 		uint32_t w_portion = __portion + sizeofheader;
 
 		pDest = new BYTE[w_portion];
 
-		Message* const pHeader = reinterpret_cast<Message*>(pDest);
-		BYTE*	  const pBody	= reinterpret_cast<BYTE*>(pDest) + sizeofheader;
+		Message* const pDstHeader = reinterpret_cast<Message*>(pDest);
+		BYTE*	 const pDstBody	  = reinterpret_cast<BYTE*>(pDest) + sizeofheader;
 
-		std::copy(&message, &message + sizeofheader, pHeader);
+		std::copy(&message, &message + 1, pDstHeader);
 
-		pHeader->offset = m_offset;
-		pHeader->length = __portion;
+		pDstHeader->offset = m_offset;
+		pDstHeader->length = __portion;
 
 		if (pSource != nullptr && message.total_length > 0 && message.length > 0)
 		{
-			const BYTE* pSourceBody = reinterpret_cast<const BYTE*>(pSource) + message.offset;
+			const BYTE* pSrcBody = reinterpret_cast<const BYTE*>(pSource) + message.offset;
 			
-			std::copy(pSourceBody, pSourceBody + __portion, pBody);
+			std::copy(pSrcBody, pSrcBody + __portion, pDstBody);
 		}
 
 		w_offset += w_portion;
@@ -107,7 +107,7 @@ uint32_t WritePayload(void*& pDest, const void*& pSource, Message& message)
 	}
 
 	message.length = __offset - m_offset;
-	message.offset += message.length;
+	message.offset += message.length;	
 
 	return __offset - m_offset;
 }
@@ -118,16 +118,16 @@ bool ReadSingle(SOCKET& connection, Message& message, BYTE*& buffer, SOCKADDR* f
 	char pBuffer[BUFFER_SIZE];
 
 	int recvval = recvfrom(connection, pBuffer, BUFFER_SIZE, NULL, from, fromlen);
-	if (recvval >= sizeofheader)
+	if (recvval >= static_cast<int>(sizeofheader))
 	{
 		Message* const pMsg  = reinterpret_cast<Message*>(pBuffer);
 
-		std::copy(pMsg, pMsg + sizeofheader, &message);
+		std::copy(pMsg, pMsg + 1, &message);
 
 		buffer = reinterpret_cast<BYTE*>(pBuffer) + sizeofheader;
 	}
 
-	return false;
+	return recvval >= static_cast<int>(sizeofheader);
 }
 
 bool ReadSingle(SOCKET& connection, Message& message, BYTE*& buffer)
@@ -200,7 +200,7 @@ bool ReadSequence(SOCKET& connection, Storage& storage, Storage::iterator& itera
 			default: throw new std::string("Unknown type!");
 		}
 
-		if (message->total_length <= ((message->offset + message->length)))
+		if (message->total_length <= (message->offset + message->length))
 		{
 			if (pivot < storage.end())
 			{

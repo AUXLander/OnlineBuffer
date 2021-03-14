@@ -112,9 +112,9 @@ void server_start(SOCKET_PACK* unpack)
 		return SendSequenceEachClient(connection, pSource, data, length);
 	};
 
-	listen(tcp_connection, maxconnlen);
+	int listencode = listen(tcp_connection, maxconnlen);
 
-	std::wcout << "Waiting for new connections..." << std::endl;
+	std::wcout << "Waiting for new connections... Listen is " << listencode << std::endl;
 
 	int   addrlen  = sizeof(tcp_addr);
 	char* pControlMsgBuffer = nullptr;
@@ -151,6 +151,7 @@ void server_start(SOCKET_PACK* unpack)
 				}
 			}
 
+			// Special!
 			if (pnode == pfirst)
 			{
 				break;

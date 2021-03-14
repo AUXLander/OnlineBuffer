@@ -67,96 +67,63 @@ CMODE reconnaissance(SOCKET_PACK* unpack)
 {
 	auto& [tcp_connection, tcp_addr, tcp_addr_broadcast, tcp_unused_flag, udp_connection, udp_addr, udp_addr_broadcast, udp_fixed_recce_mode] = *unpack;
 
-	switch (udp_fixed_recce_mode)
+	recce_mode = udp_fixed_recce_mode;
+
+	long sec = static_cast<long>(2);
+
+	if (recce_mode == RECCE_WAIT_FOR_INVITE)
 	{
-		case RECCE_MODE_SERVER:
+		while (true)
 		{
-			recce_mode = RECCE_SENDING_INVITATIONS;
-			break;
-		};
+			Sleep(2000);
 
-		case RECCE_MODE_CLIENT:
-		{
-			__fallthrough;
-		};
-			 
-		case RECCE_MODE_SWTICHEBLE:
-		{
-			recce_mode = RECCE_WAIT_FOR_INVITE;
-			break;
-		};
-	}
-
-	srand(static_cast<unsigned int>(time(NULL)));
-
-	time_t timeout_start;
-	double timeout_duration;
-	double package_delay_sec;
-	double package_delay_msec;
-
-	while (true)
-	{
-		time(&timeout_start);
-
-		if (recce_mode == RECCE_WAIT_FOR_INVITE)
-		{
-			timeout_duration = rand() * RAND_RANGE_SECONDS * RAND_MAX_DENOMINATOR;
-
-			package_delay_sec  = 1.0;
-			package_delay_msec = 1000.0 * package_delay_sec;
-
-			while (std::abs(difftime(timeout_start, time(NULL))) < timeout_duration)
+			switch (recvfromTimeOutUDP(udp_connection, sec, 0))
 			{
-				switch (recvfromTimeOutUDP(udp_connection, static_cast<long>(package_delay_sec), 0))
+				case -1: continue;
+				case  0: continue;
+
+				default:
 				{
-					case -1: continue;
-					case  0: continue;
+					int addr_other_len = sizeof(sockaddr_in);
+					sockaddr_in addr_other;
 
-					default:
+					BYTE* buffer;
+
+					Message invite;
+					Message accept = {
+						.data = Message::Data::Control,
+						.hash = XXHM(nullptr, 0, NULL),
+						.type = Message::Type::BroadcastAccept,
+						.total_length = 0,
+						.offset = 0,
+						.length = 0
+					};
+
+					ReadSingle(udp_connection, invite, buffer, reinterpret_cast<SOCKADDR*>(&addr_other), &addr_other_len);
+
+					if (invite.data == Message::Data::Control && invite.type == Message::Type::BroadcastInvite && inetaddr != addr_other.sin_addr.s_addr)
 					{
-						int addr_other_len = sizeof(sockaddr_in);
-						sockaddr_in addr_other;
+						std::wcout << "Got broadcast!" << std::endl;
 
-						BYTE* buffer;
+						tcp_addr.sin_addr.s_addr = addr_other.sin_addr.s_addr;
 
-						Message invite;
-						Message accept = {
-							.data = Message::Data::Control,
-							.hash = XXHM(nullptr, 0, NULL),
-							.type = Message::Type::BroadcastAccept,
-							.total_length = 0,
-							.offset = 0,
-							.length = 0
-						};
+						const void* ref = nullptr;
 
-						ReadSingle(udp_connection, invite, buffer, reinterpret_cast<SOCKADDR*>(&addr_other), &addr_other_len);
+						bool sendcode = SendSingle(udp_connection, ref, accept, reinterpret_cast<SOCKADDR*>(&addr_other), sizeof(SOCKADDR));
 
-						if(invite.data == Message::Data::Control && invite.type == Message::Type::BroadcastInvite && inetaddr != addr_other.sin_addr.s_addr)
+						if (sendcode)
 						{
-							std::wcout << "Got broadcast!" << std::endl;
-
-							tcp_addr.sin_addr.s_addr = addr_other.sin_addr.s_addr;
-
-							const void* ref = nullptr;
-
-							bool sendcode = SendSingle(udp_connection, ref, accept, reinterpret_cast<SOCKADDR*>(&addr_other), sizeof(SOCKADDR));
-
-							if (sendcode)
-							{
-								return CUSTOM_MODE_CLIENT;
-							}
+							return CUSTOM_MODE_CLIENT;
 						}
 					}
 				}
 			}
-		} 
-		else if (recce_mode == RECCE_SENDING_INVITATIONS)
+		}
+	}
+	else if (recce_mode == RECCE_SENDING_INVITATIONS)
+	{
+		while (true)
 		{
-			timeout_duration = rand() * RAND_RANGE_SECONDS * RAND_MAX_DENOMINATOR;
-
-			package_delay_sec  = 0.5;
-			package_delay_msec = 1000.0 * package_delay_sec;
-
 			Message invite = {
 				.data = Message::Data::Control,
 				.hash = XXHM(nullptr, 0, NULL),
@@ -166,34 +133,32 @@ CMODE reconnaissance(SOCKET_PACK* unpack)
 				.length = 0
 			};
 
-			while (std::abs(difftime(timeout_start, time(NULL))) < timeout_duration)
+			invite.type = Message::Type::BroadcastInvite;
+
+			const void* ref = nullptr;
+
+			SendSingle(udp_connection, ref, invite, reinterpret_cast<SOCKADDR*>(&udp_addr_broadcast), sizeof(udp_addr_broadcast));
+
+			Sleep(2000);
+
+
+			switch (recvfromTimeOutUDP(udp_connection, sec, 0))
 			{
-				invite.type = Message::Type::BroadcastInvite;
+				case -1: continue;
+				case  0: continue;
 
-				const void* ref = nullptr;
-
-				SendSingle(udp_connection, ref, invite, reinterpret_cast<SOCKADDR*>(&udp_addr_broadcast), sizeof(udp_addr_broadcast));
-
-				Sleep(static_cast<DWORD>(package_delay_msec));
-
-				switch (recvfromTimeOutUDP(udp_connection, static_cast<long>(package_delay_sec), 0))
+				default:
 				{
-					case -1: continue;
-					case  0: continue;
+					BYTE* buffer;
+					Message accept;
 
-					default:
+					ReadSingle(udp_connection, accept, buffer);
+
+					if (accept.data == Message::Data::Control && accept.type == Message::Type::BroadcastAccept)
 					{
-						BYTE* buffer;
-						Message accept;
+						std::wcout << "Go to server mode!" << std::endl;
 
-						ReadSingle(udp_connection, accept, buffer);
-
-						if (accept.data == Message::Data::Control && accept.type == Message::Type::BroadcastAccept)
-						{
-							std::wcout << "Go to server mode!" << std::endl;
-
-							return CUSTOM_MODE_SERVER;
-						}
+						return CUSTOM_MODE_SERVER;
 					}
 				}
 			}

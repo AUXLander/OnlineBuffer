@@ -183,6 +183,8 @@ ClipboardState::Status GetCBData(ClipboardState& state)
 
 void ClipboadWorker(SOCKET& tcp_connection)
 {
+	Sleep(10000);
+
 	// Initialize GDI+.
 	ULONG_PTR gdiplusToken;
 	Gdiplus::GdiplusStartupInput gdiplusStartupInput;
